@@ -1,47 +1,42 @@
 package service
 
 import (
+	"context"
 	"errors"
+	"os"
+	"time"
 
 	"sorint-fleet/internal/config"
+	"sorint-fleet/internal/dto"
 	"sorint-fleet/internal/model"
 	"sorint-fleet/internal/repository"
 
+	"cloud.google.com/go/auth/credentials/idtoken"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
-type RegisterInput struct {
-	FirstName string `json:"first_name" binding:"required"`
-	LastName  string `json:"last_name"  binding:"required"`
-	Email     string `json:"email"      binding:"required,email"`
-	Password  string `json:"password"   binding:"required,min=8"`
-	Role string `json:"role"`
-}
-
-type LoginInput struct {
-	Email    string `json:"email"    binding:"required,email"`
-	Password string `json:"password" binding:"required"`
-}
-
-type AuthResponse struct {
-	Token string       `json:"token"`
-	User  *model.User `json:"user"`
-}
-
 type AuthService interface {
-	Register(input RegisterInput) (*AuthResponse, error)
-	Login(input LoginInput) (*AuthResponse, error)
+	Register(input dto.RegisterDto) (*dto.AuthResponseDto, error)
+	Login(input dto.LoginDto) (*dto.AuthResponseDto, error)
+	Refresh(refreshToken string) (*dto.AuthResponseDto, error)
+	Logout(refreshToken string) error
+	GoogleLogin(token string) (*dto.AuthResponseDto, error)
 }
 
 type authService struct {
-	userRepo repository.UserRepository
+	userRepo    repository.UserRepository
+	refreshRepo repository.RefreshTokenRepository
 }
 
-func NewAuthService(userRepo repository.UserRepository) AuthService {
-	return &authService{userRepo: userRepo}
+func NewAuthService(userRepo repository.UserRepository, refreshRepo repository.RefreshTokenRepository) AuthService {
+	return &authService{
+		userRepo:    userRepo,
+		refreshRepo: refreshRepo,
+	}
 }
 
-func (s *authService) Register(input RegisterInput) (*AuthResponse, error) {
+func (s *authService) Register(input dto.RegisterDto) (*dto.AuthResponseDto, error) {
 	exists, err := s.userRepo.ExistsByEmail(input.Email)
 	if err != nil {
 		return nil, err
@@ -55,7 +50,7 @@ func (s *authService) Register(input RegisterInput) (*AuthResponse, error) {
 		return nil, err
 	}
 
-	role := model.RoleDriver
+	role := model.RoleUser
 	if input.Role == string(model.RoleAdmin) {
 		role = model.RoleAdmin
 	}
@@ -77,10 +72,22 @@ func (s *authService) Register(input RegisterInput) (*AuthResponse, error) {
 		return nil, err
 	}
 
-	return &AuthResponse{Token: token, User: user}, nil
+	refresh := generateRefreshToken()
+
+	s.refreshRepo.Create(&model.RefreshToken{
+		UserID:    user.ID,
+		Token:     refresh,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+	})
+
+	return &dto.AuthResponseDto{
+		Token:        token,
+		RefreshToken: refresh,
+		User:         user,
+	}, nil
 }
 
-func (s *authService) Login(input LoginInput) (*AuthResponse, error) {
+func (s *authService) Login(input dto.LoginDto) (*dto.AuthResponseDto, error) {
 	user, err := s.userRepo.FindByEmail(input.Email)
 	if err != nil {
 		return nil, err
@@ -98,5 +105,109 @@ func (s *authService) Login(input LoginInput) (*AuthResponse, error) {
 		return nil, err
 	}
 
-	return &AuthResponse{Token: token, User: user}, nil
+	refresh := generateRefreshToken()
+
+	s.refreshRepo.Create(&model.RefreshToken{
+		UserID:    user.ID,
+		Token:     refresh,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+	})
+
+	return &dto.AuthResponseDto{
+		Token:        token,
+		RefreshToken: refresh,
+		User:         user,
+	}, nil
+}
+
+func generateRefreshToken() string {
+	return uuid.NewString()
+}
+
+func (s *authService) Refresh(refreshToken string) (*dto.AuthResponseDto, error) {
+	rt, err := s.refreshRepo.Find(refreshToken)
+	if err != nil {
+		return nil, errors.New("invalid refresh token")
+	}
+
+	if time.Now().After(rt.ExpiresAt) {
+		s.refreshRepo.Delete(refreshToken)
+		return nil, errors.New("refresh token expired")
+	}
+
+	user, err := s.userRepo.FindByID(rt.UserID)
+	if err != nil || user == nil {
+		return nil, errors.New("user not found")
+	}
+
+	s.refreshRepo.Delete(refreshToken)
+
+	newRefresh := generateRefreshToken()
+
+	s.refreshRepo.Create(&model.RefreshToken{
+		UserID:    user.ID,
+		Token:     newRefresh,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+	})
+
+	token, _ := config.GenerateToken(user.ID, string(user.Role))
+
+	return &dto.AuthResponseDto{
+		Token:        token,
+		RefreshToken: newRefresh,
+		User:         user,
+	}, nil
+}
+
+func (s *authService) Logout(refreshToken string) error {
+	if refreshToken == "" {
+		return errors.New("missing refresh token")
+	}
+
+	return s.refreshRepo.Delete(refreshToken)
+}
+
+func (s *authService) GoogleLogin(googleToken string) (*dto.AuthResponseDto, error) {
+	clientID := os.Getenv("GOOGLE_CLIENT_ID")
+
+	payload, err := idtoken.Validate(context.Background(), googleToken, clientID)
+	if err != nil {
+		return nil, errors.New("invalid google token")
+	}
+
+	email := payload.Claims["email"].(string)
+	firstName := ""
+	lastName := ""
+
+	if name, ok := payload.Claims["name"].(string); ok {
+		firstName = name
+	}
+
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil {
+		return nil, err
+	}
+
+	if user == nil {
+		user = &model.User{
+			Email:     email,
+			FirstName: firstName,
+			LastName:  lastName,
+			Role:      model.RoleUser,
+		}
+
+		if err := s.userRepo.Create(user); err != nil {
+			return nil, err
+		}
+	}
+
+	token, err := config.GenerateToken(user.ID, string(user.Role))
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.AuthResponseDto{
+		Token: token,
+		User:  user,
+	}, nil
 }

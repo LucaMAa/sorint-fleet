@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"sorint-fleet/internal/bootstrap"
 	"sorint-fleet/internal/config"
 	"sorint-fleet/internal/router"
 )
@@ -11,6 +12,8 @@ import (
 func main() {
 	cfg := config.LoadConfig()
 	config.InitDB(cfg)
+
+	bootstrap.Admin()
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -20,7 +23,5 @@ func main() {
 	r := router.Setup()
 
 	log.Printf("Sorint Fleet API avviata su :%s", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("errore avvio server: %v", err)
-	}
+	r.Run(":" + port)
 }

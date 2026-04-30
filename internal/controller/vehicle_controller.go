@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"sorint-fleet/internal/dto"
 	"sorint-fleet/internal/model"
 	"sorint-fleet/internal/service"
 	"sorint-fleet/pkg/response"
@@ -18,7 +19,7 @@ func NewVehicleController(vehicleSvc service.VehicleService) *VehicleController 
 }
 
 func (ctrl *VehicleController) Create(c *gin.Context) {
-	var input service.CreateVehicleInput
+	var input dto.CreateVehicleDto
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -38,7 +39,7 @@ func (ctrl *VehicleController) Create(c *gin.Context) {
 }
 
 func (ctrl *VehicleController) List(c *gin.Context) {
-	filters := service.ListVehiclesInput{}
+	filters := dto.ListVehiclesDto{}
 
 	if s := c.Query("status"); s != "" {
 		filters.Status = model.VehicleStatus(s)
@@ -84,7 +85,7 @@ func (ctrl *VehicleController) Assign(c *gin.Context) {
 		return
 	}
 
-	var input service.AssignVehicleInput
+	var input dto.AssignVehicleDto
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -142,4 +143,66 @@ func (ctrl *VehicleController) Delete(c *gin.Context) {
 	}
 
 	response.NoContent(c)
+}
+
+func (vc *VehicleController) Brands(c *gin.Context) {
+	brands, _ := vc.vehicleSvc.GetBrands()
+	c.JSON(200, brands)
+}
+
+func (vc *VehicleController) ModelsByBrand(c *gin.Context) {
+	brand := c.Query("brand")
+
+	models, _ := vc.vehicleSvc.GetModelsByBrand(brand)
+	c.JSON(200, models)
+}
+
+func (ctrl *VehicleController) Update(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "id is not valid")
+		return
+	}
+
+	var input dto.UpdateVehicleDto
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	vehicle, err := ctrl.vehicleSvc.Update(id, input)
+	if err != nil {
+		switch err.Error() {
+		case "vehicle not found":
+			response.NotFound(c, err.Error())
+		default:
+			response.InternalError(c, err)
+		}
+		return
+	}
+
+	response.OK(c, vehicle)
+}
+
+func (ctrl *VehicleController) ImportExcel(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		response.BadRequest(c, "file is required")
+		return
+	}
+
+	f, err := file.Open()
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+	defer f.Close()
+
+	result, err := ctrl.vehicleSvc.ImportFromExcel(f)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, result)
 }

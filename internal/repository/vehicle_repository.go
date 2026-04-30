@@ -17,6 +17,8 @@ type VehicleRepository interface {
 	FindByLicensePlate(plate string) (*model.Vehicle, error)
 	Update(vehicle *model.Vehicle) error
 	Delete(id uuid.UUID) error
+	FindAllBrands() ([]model.Brand, error)
+	FindAllModelsByBrand(brandName string) ([]model.Model, error)
 }
 
 type VehicleFilters struct {
@@ -75,4 +77,21 @@ func (r *vehicleRepository) Update(vehicle *model.Vehicle) error {
 
 func (r *vehicleRepository) Delete(id uuid.UUID) error {
 	return r.db.Delete(&model.Vehicle{}, "id = ?", id).Error
+}
+
+func (r *vehicleRepository) FindAllBrands() ([]model.Brand, error) {
+	var brands []model.Brand
+	err := r.db.Find(&brands).Error
+	return brands, err
+}
+
+func (r *vehicleRepository) FindAllModelsByBrand(brandName string) ([]model.Model, error) {
+	var models []model.Model
+	err := r.db.
+		Table("models AS m").
+		Select("m.*, b.id AS brand_id, b.name AS brand_name").
+		Joins("LEFT JOIN brands b ON m.brand_id = b.id").
+		Find(&models).Error
+
+	return models, err
 }

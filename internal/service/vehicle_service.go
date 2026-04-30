@@ -2,43 +2,30 @@ package service
 
 import (
 	"errors"
+	"io"
 	"time"
 
+	"sorint-fleet/internal/dto"
 	"sorint-fleet/internal/model"
 	"sorint-fleet/internal/repository"
+	"sorint-fleet/internal/validator"
+	"sorint-fleet/pkg"
 
+	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/google/uuid"
 )
 
-// DTO
-
-type CreateVehicleInput struct {
-	LicensePlate string `json:"license_plate" binding:"required"`
-	Brand        string `json:"brand"         binding:"required"`
-	Model        string `json:"model"         binding:"required"`
-	Year         int    `json:"year"          binding:"required,min=1900"`
-	Color        string `json:"color"`
-	FuelType     string `json:"fuel_type"`
-	Mileage      int    `json:"mileage"`
-	Notes        string `json:"notes"`
-}
-
-type AssignVehicleInput struct {
-	UserID uuid.UUID `json:"user_id" binding:"required"`
-}
-
-type ListVehiclesInput struct {
-	Status       model.VehicleStatus
-	AssignedToID *uuid.UUID
-}
-
 type VehicleService interface {
-	Create(input CreateVehicleInput) (*model.Vehicle, error)
-	List(filters ListVehiclesInput) ([]model.Vehicle, error)
+	Create(input dto.CreateVehicleDto) (*model.Vehicle, error)
+	Update(id uuid.UUID, input dto.UpdateVehicleDto) (*model.Vehicle, error)
+	List(filters dto.ListVehiclesDto) ([]model.Vehicle, error)
 	GetByID(id uuid.UUID) (*model.Vehicle, error)
-	Assign(vehicleID uuid.UUID, input AssignVehicleInput) (*model.Vehicle, error)
+	Assign(vehicleID uuid.UUID, input dto.AssignVehicleDto) (*model.Vehicle, error)
 	Unassign(vehicleID uuid.UUID) (*model.Vehicle, error)
 	Delete(id uuid.UUID) error
+	GetBrands() ([]model.Brand, error)
+	GetModelsByBrand(brandName string) ([]model.Model, error)
+	ImportFromExcel(file io.Reader) (int, error)
 }
 
 type vehicleService struct {
@@ -56,7 +43,12 @@ func NewVehicleService(
 	}
 }
 
-func (s *vehicleService) Create(input CreateVehicleInput) (*model.Vehicle, error) {
+func (s *vehicleService) Create(input dto.CreateVehicleDto) (*model.Vehicle, error) {
+
+	if err := validator.Validate(input); err != nil {
+		return nil, err
+	}
+
 	existing, err := s.vehicleRepo.FindByLicensePlate(input.LicensePlate)
 	if err != nil {
 		return nil, err
@@ -88,7 +80,7 @@ func (s *vehicleService) Create(input CreateVehicleInput) (*model.Vehicle, error
 	return vehicle, nil
 }
 
-func (s *vehicleService) List(filters ListVehiclesInput) ([]model.Vehicle, error) {
+func (s *vehicleService) List(filters dto.ListVehiclesDto) ([]model.Vehicle, error) {
 	return s.vehicleRepo.FindAll(repository.VehicleFilters{
 		Status:       filters.Status,
 		AssignedToID: filters.AssignedToID,
@@ -106,7 +98,7 @@ func (s *vehicleService) GetByID(id uuid.UUID) (*model.Vehicle, error) {
 	return vehicle, nil
 }
 
-func (s *vehicleService) Assign(vehicleID uuid.UUID, input AssignVehicleInput) (*model.Vehicle, error) {
+func (s *vehicleService) Assign(vehicleID uuid.UUID, input dto.AssignVehicleDto) (*model.Vehicle, error) {
 	vehicle, err := s.vehicleRepo.FindByID(vehicleID)
 	if err != nil {
 		return nil, err
@@ -155,6 +147,7 @@ func (s *vehicleService) Unassign(vehicleID uuid.UUID) (*model.Vehicle, error) {
 
 	vehicle.Status = model.StatusAvailable
 	vehicle.AssignedToID = nil
+	vehicle.AssignedTo = nil
 	vehicle.AssignedAt = nil
 
 	if err := s.vehicleRepo.Update(vehicle); err != nil {
@@ -172,4 +165,120 @@ func (s *vehicleService) Delete(id uuid.UUID) error {
 		return errors.New("vehicle not found")
 	}
 	return s.vehicleRepo.Delete(id)
+}
+
+func (s *vehicleService) GetBrands() ([]model.Brand, error) {
+	brands, err := s.vehicleRepo.FindAllBrands()
+	if err != nil {
+		return []model.Brand{}, err
+	}
+	return brands, err
+}
+
+func (s *vehicleService) GetModelsByBrand(brandName string) ([]model.Model, error) {
+	models, err := s.vehicleRepo.FindAllModelsByBrand(brandName)
+	if err != nil {
+		return []model.Model{}, err
+	}
+	return models, err
+}
+
+func (s *vehicleService) Update(id uuid.UUID, input dto.UpdateVehicleDto) (*model.Vehicle, error) {
+
+	if err := validator.Validate(input); err != nil {
+		return nil, err
+	}
+
+	vehicle, err := s.vehicleRepo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if vehicle == nil {
+		return nil, errors.New("vehicle not found")
+	}
+
+	if input.LicensePlate != nil {
+		vehicle.LicensePlate = *input.LicensePlate
+	}
+	if input.Brand != nil {
+		vehicle.Brand = *input.Brand
+	}
+	if input.Model != nil {
+		vehicle.Model = *input.Model
+	}
+	if input.Year != nil {
+		vehicle.Year = *input.Year
+	}
+	if input.Color != nil {
+		vehicle.Color = *input.Color
+	}
+	if input.FuelType != nil {
+		vehicle.FuelType = *input.FuelType
+	}
+	if input.Mileage != nil {
+		vehicle.Mileage = *input.Mileage
+	}
+	if input.Notes != nil {
+		vehicle.Notes = *input.Notes
+	}
+
+	if err := s.vehicleRepo.Update(vehicle); err != nil {
+		return nil, err
+	}
+
+	return s.vehicleRepo.FindByID(id)
+}
+
+func (s *vehicleService) ImportFromExcel(file io.Reader) (int, error) {
+	f, err := excelize.OpenReader(file)
+	if err != nil {
+		return 0, err
+	}
+
+	sheets := f.GetSheetMap()
+	if len(sheets) == 0 {
+		return 0, errors.New("no sheets found")
+	}
+
+	var rows [][]string
+
+	for _, sheet := range sheets {
+		r := f.GetRows(sheet)
+		if len(r) > 1 {
+			rows = r
+			break
+		}
+	}
+
+	if len(rows) == 0 {
+		return 0, errors.New("empty sheet")
+	}
+
+	count := 0
+
+	for i := 1; i < len(rows); i++ {
+		row := rows[i]
+
+		if len(row) < 4 {
+			continue
+		}
+
+		vehicle := &model.Vehicle{
+			LicensePlate: row[0],
+			Brand:        row[1],
+			Model:        row[2],
+			Year:         pkg.ParseInt(row[3]),
+			Color:        pkg.GetOr(row, 4),
+			FuelType:     pkg.GetOr(row, 5),
+			Mileage:      pkg.ParseInt(pkg.GetOr(row, 6)),
+			Notes:        pkg.GetOr(row, 7),
+			Status:       model.StatusAvailable,
+		}
+
+		if err := s.vehicleRepo.Create(vehicle); err == nil {
+			count++
+		}
+	}
+
+	return count, nil
 }

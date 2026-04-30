@@ -54,7 +54,7 @@ func (s *userService) UpdateRole(id uuid.UUID, role string) (*model.User, error)
 		return nil, errors.New("user not found")
 	}
 
-	if role != string(model.RoleAdmin) && role != string(model.RoleDriver) {
+	if role != string(model.RoleAdmin) && role != string(model.RoleUser) {
 		return nil, errors.New("invalid role")
 	}
 

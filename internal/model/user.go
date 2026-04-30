@@ -10,8 +10,8 @@ import (
 type Role string
 
 const (
-	RoleAdmin  Role = "admin"
-	RoleDriver Role = "driver"
+	RoleAdmin Role = "admin"
+	RoleUser  Role = "user"
 )
 
 type User struct {
@@ -20,11 +20,11 @@ type User struct {
 	UpdatedAt time.Time      `                                  json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index"                      json:"-"`
 
-	FirstName string `gorm:"not null"                   json:"first_name"`
-	LastName  string `gorm:"not null"                   json:"last_name"`
-	Email     string `gorm:"uniqueIndex;not null"       json:"email"`
-	Password  string `gorm:"not null"                   json:"-"`
-	Role      Role   `gorm:"type:text;default:'driver'" json:"role"`
+	FirstName        string    `gorm:"not null"                   json:"first_name"`
+	LastName         string    `gorm:"not null"                   json:"last_name"`
+	Email            string    `gorm:"uniqueIndex;not null"       json:"email"`
+	Password         string    `gorm:"not null"                   json:"-"`
+	Role             Role      `gorm:"type:text;default:'driver'" json:"role"`
 	AssignedVehicles []Vehicle `gorm:"foreignKey:AssignedToID"    json:"assigned_vehicles,omitempty"`
 }
 

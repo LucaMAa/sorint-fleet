@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -78,44 +77,9 @@ func InitDB(config *DatabaseConfig) {
 	if err := DB.AutoMigrate(
 		&model.User{},
 		&model.Vehicle{},
+		&model.Brand{},
+		&model.Model{},
 	); err != nil {
 		log.Fatalf("error during automigrate: %v", err)
 	}
-
-	BootstrapAdmin()
-}
-
-func BootstrapAdmin() {
-	adminEmail := os.Getenv("ADMIN_EMAIL")
-	adminPassword := os.Getenv("ADMIN_PASSWORD")
-
-	if adminEmail == "" || adminPassword == "" {
-		log.Println("ADMIN_EMAIL o ADMIN_PASSWORD missing, skipping bootstrap")
-		return
-	}
-
-	var user model.User
-	result := DB.Where("email = ?", adminEmail).First(&user)
-
-	if result.Error == nil {
-		log.Println("admin already exist")
-		return
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
-	if err != nil {
-		log.Fatalf("error during hashing password: %v", err)
-	}
-
-	admin := model.User{
-		Email:    adminEmail,
-		Password: string(hashedPassword),
-		Role:     "admin",
-	}
-
-	if err := DB.Create(&admin).Error; err != nil {
-		log.Fatalf("errore during admin creation: %v", err)
-	}
-
-	log.Println("Admin created")
 }

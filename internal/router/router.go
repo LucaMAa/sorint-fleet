@@ -17,7 +17,9 @@ func Setup() *gin.Engine {
 	userRepo := repository.NewUserRepository()
 	vehicleRepo := repository.NewVehicleRepository()
 
-	authSvc := service.NewAuthService(userRepo)
+	refreshRepo := repository.NewRefreshTokenRepository()
+
+	authSvc := service.NewAuthService(userRepo, refreshRepo)
 	vehicleSvc := service.NewVehicleService(vehicleRepo, userRepo)
 	userSvc := service.NewUserService(userRepo)
 
@@ -31,6 +33,9 @@ func Setup() *gin.Engine {
 		{
 			auth.POST("/register", authCtrl.Register)
 			auth.POST("/login", authCtrl.Login)
+			auth.POST("/refresh", authCtrl.Refresh)
+			auth.POST("/logout", authCtrl.Logout)
+			auth.POST("/google", authCtrl.Google)
 		}
 
 		users := v1.Group("/users", middleware.Auth(), middleware.RequireRole("admin"))
@@ -46,9 +51,17 @@ func Setup() *gin.Engine {
 			vehicles.GET("/:id", vehicleCtrl.GetByID)
 
 			vehicles.POST("", middleware.RequireRole("admin"), vehicleCtrl.Create)
+			vehicles.PATCH("/:id", middleware.RequireRole("admin"), vehicleCtrl.Update)
 			vehicles.PATCH("/:id/assign", middleware.RequireRole("admin"), vehicleCtrl.Assign)
 			vehicles.PATCH("/:id/unassign", middleware.RequireRole("admin"), vehicleCtrl.Unassign)
 			vehicles.DELETE("/:id", middleware.RequireRole("admin"), vehicleCtrl.Delete)
+			vehicles.POST("/import", middleware.RequireRole("admin"), vehicleCtrl.ImportExcel)
+		}
+
+		vehicleMeta := v1.Group("/vehicle-meta", middleware.Auth())
+		{
+			vehicleMeta.GET("/brands", vehicleCtrl.Brands)
+			vehicleMeta.GET("/models", vehicleCtrl.ModelsByBrand)
 		}
 	}
 
