@@ -179,8 +179,16 @@ func (s *authService) GoogleLogin(googleToken string) (*dto.AuthResponseDto, err
 	firstName := ""
 	lastName := ""
 
-	if name, ok := payload.Claims["name"].(string); ok {
-		firstName = name
+	if v, ok := payload.Claims["given_name"].(string); ok {
+		firstName = v
+	}
+	if v, ok := payload.Claims["family_name"].(string); ok {
+		lastName = v
+	}
+	if firstName == "" {
+		if v, ok := payload.Claims["name"].(string); ok {
+			firstName = v
+		}
 	}
 
 	user, err := s.userRepo.FindByEmail(email)

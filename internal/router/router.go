@@ -45,7 +45,7 @@ func Setup() *gin.Engine {
 			users.PATCH("/:id/role", userCtrl.UpdateRole)
 		}
 
-		vehicles := v1.Group("/vehicles", middleware.Auth())
+		vehicles := v1.Group("/vehicles", middleware.Auth(), middleware.RequireRole("admin"))
 		{
 			vehicles.GET("", vehicleCtrl.List)
 			vehicles.GET("/:id", vehicleCtrl.GetByID)
@@ -58,7 +58,7 @@ func Setup() *gin.Engine {
 			vehicles.POST("/import", middleware.RequireRole("admin"), vehicleCtrl.ImportExcel)
 		}
 
-		vehicleMeta := v1.Group("/vehicle-meta", middleware.Auth())
+		vehicleMeta := v1.Group("/vehicle-meta", middleware.Auth(), middleware.RequireRole("admin"))
 		{
 			vehicleMeta.GET("/brands", vehicleCtrl.Brands)
 			vehicleMeta.GET("/models", vehicleCtrl.ModelsByBrand)
