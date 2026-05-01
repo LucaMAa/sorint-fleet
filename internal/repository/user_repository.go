@@ -14,10 +14,17 @@ type UserRepository interface {
 	Create(user *model.User) error
 	FindByID(id uuid.UUID) (*model.User, error)
 	FindByEmail(email string) (*model.User, error)
-	FindAll() ([]model.User, error)
+	FindAll(filters UserFilters) ([]model.User, int64, error)
+	FindByStatus(status model.UserStatus) ([]model.User, error)
 	ExistsByEmail(email string) (bool, error)
 	Save(user *model.User) error
 	Delete(id uuid.UUID) error
+}
+
+type UserFilters struct {
+	Search string
+	Limit  int
+	Offset int
 }
 
 type userRepository struct {
@@ -50,9 +57,51 @@ func (r *userRepository) FindByEmail(email string) (*model.User, error) {
 	return &user, err
 }
 
-func (r *userRepository) FindAll() ([]model.User, error) {
+func (r *userRepository) FindAll(filters UserFilters) ([]model.User, int64, error) {
 	var users []model.User
-	err := r.db.Find(&users).Error
+	var total int64
+
+	q := r.db.Model(&model.User{}).Where("status = ?", model.StatusApproved)
+
+	if filters.Search != "" {
+		search := filters.Search
+		like := "%" + search + "%"
+
+		q = q.Where(
+			`(
+				to_tsvector('simple',
+					coalesce(first_name,'') || ' ' ||
+					coalesce(last_name,'') || ' ' ||
+					coalesce(email,'')
+				) @@ plainto_tsquery('simple', ?)
+			) OR (
+				first_name ILIKE ? OR last_name ILIKE ? OR email ILIKE ?
+			)`,
+			search, like, like, like,
+		)
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	limit := filters.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+
+	err := q.
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(filters.Offset).
+		Find(&users).Error
+
+	return users, total, err
+}
+
+func (r *userRepository) FindByStatus(status model.UserStatus) ([]model.User, error) {
+	var users []model.User
+	err := r.db.Where("status = ?", status).Order("created_at ASC").Find(&users).Error
 	return users, err
 }
 

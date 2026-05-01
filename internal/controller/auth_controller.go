@@ -8,6 +8,7 @@ import (
 	"sorint-fleet/pkg/response"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type AuthController struct {
@@ -25,8 +26,7 @@ func (ctrl *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-	res, err := ctrl.authSvc.Register(input)
-	if err != nil {
+	if err := ctrl.authSvc.Register(input); err != nil {
 		if err.Error() == "email already exist" {
 			response.Conflict(c, err.Error())
 			return
@@ -37,8 +37,7 @@ func (ctrl *AuthController) Register(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
-		"token":   res.Token,
-		"user":    res.User,
+		"message": "Registrazione ricevuta. Il tuo account sarà attivo dopo l'approvazione dell'amministratore.",
 	})
 }
 
@@ -51,13 +50,22 @@ func (ctrl *AuthController) Login(c *gin.Context) {
 
 	res, err := ctrl.authSvc.Login(input)
 	if err != nil {
-		response.Unauthorized(c, err.Error())
+		switch err.Error() {
+		case "account_pending":
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "account_pending"})
+		case "account_rejected":
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "account_rejected"})
+		default:
+			response.Unauthorized(c, err.Error())
+		}
 		return
 	}
 
 	response.OK(c, gin.H{
-		"token": res.Token,
-		"user":  res.User,
+		"token":                res.Token,
+		"refresh_token":        res.RefreshToken,
+		"user":                 res.User,
+		"must_change_password": res.MustChangePassword,
 	})
 }
 
@@ -65,7 +73,6 @@ func (ctrl *AuthController) Refresh(c *gin.Context) {
 	var body struct {
 		RefreshToken string `json:"refresh_token" binding:"required"`
 	}
-
 	if err := c.ShouldBindJSON(&body); err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -84,7 +91,6 @@ func (ctrl *AuthController) Logout(c *gin.Context) {
 	var body struct {
 		RefreshToken string `json:"refresh_token" binding:"required"`
 	}
-
 	if err := c.ShouldBindJSON(&body); err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -95,14 +101,11 @@ func (ctrl *AuthController) Logout(c *gin.Context) {
 		return
 	}
 
-	response.OK(c, gin.H{
-		"message": "logged out",
-	})
+	response.OK(c, gin.H{"message": "logged out"})
 }
 
 func (ctrl *AuthController) Google(c *gin.Context) {
 	var input dto.GoogleAuthDto
-
 	if err := c.ShouldBindJSON(&input); err != nil {
 		response.BadRequest(c, err.Error())
 		return
@@ -110,12 +113,38 @@ func (ctrl *AuthController) Google(c *gin.Context) {
 
 	res, err := ctrl.authSvc.GoogleLogin(input.Token)
 	if err != nil {
-		response.Unauthorized(c, err.Error())
+		switch err.Error() {
+		case "account_pending":
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "account_pending"})
+		case "account_rejected":
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "account_rejected"})
+		default:
+			response.Unauthorized(c, err.Error())
+		}
 		return
 	}
 
-	response.OK(c, gin.H{
-		"token": res.Token,
-		"user":  res.User,
-	})
+	response.OK(c, gin.H{"token": res.Token, "user": res.User})
+}
+
+func (ctrl *AuthController) ChangePassword(c *gin.Context) {
+	userIDRaw, _ := c.Get("user_id")
+	userID, ok := userIDRaw.(uuid.UUID)
+	if !ok {
+		response.Unauthorized(c, "not authenticated")
+		return
+	}
+
+	var input dto.ChangePasswordDto
+	if err := c.ShouldBindJSON(&input); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	if err := ctrl.authSvc.ChangePassword(userID, input); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	response.OK(c, gin.H{"message": "Password aggiornata con successo"})
 }

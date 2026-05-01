@@ -12,7 +12,7 @@ import (
 
 type VehicleRepository interface {
 	Create(vehicle *model.Vehicle) error
-	FindAll(filters VehicleFilters) ([]model.Vehicle, error)
+	FindAll(filters VehicleFilters) ([]model.Vehicle, int64, error)
 	FindByID(id uuid.UUID) (*model.Vehicle, error)
 	FindByLicensePlate(plate string) (*model.Vehicle, error)
 	Update(vehicle *model.Vehicle) error
@@ -24,6 +24,9 @@ type VehicleRepository interface {
 type VehicleFilters struct {
 	Status       model.VehicleStatus
 	AssignedToID *uuid.UUID
+	Search       string
+	Limit        int
+	Offset       int
 }
 
 type vehicleRepository struct {
@@ -38,9 +41,11 @@ func (r *vehicleRepository) Create(vehicle *model.Vehicle) error {
 	return r.db.Create(vehicle).Error
 }
 
-func (r *vehicleRepository) FindAll(filters VehicleFilters) ([]model.Vehicle, error) {
+func (r *vehicleRepository) FindAll(filters VehicleFilters) ([]model.Vehicle, int64, error) {
 	var vehicles []model.Vehicle
-	q := r.db.Preload("AssignedTo")
+	var total int64
+
+	q := r.db.Model(&model.Vehicle{}).Preload("AssignedTo")
 
 	if filters.Status != "" {
 		q = q.Where("status = ?", filters.Status)
@@ -49,8 +54,41 @@ func (r *vehicleRepository) FindAll(filters VehicleFilters) ([]model.Vehicle, er
 		q = q.Where("assigned_to_id = ?", *filters.AssignedToID)
 	}
 
-	err := q.Find(&vehicles).Error
-	return vehicles, err
+	if filters.Search != "" {
+		search := filters.Search
+		like := "%" + search + "%"
+
+		q = q.Where(
+			`(
+			to_tsvector('simple',
+				coalesce(license_plate,'') || ' ' ||
+				coalesce(brand,'') || ' ' ||
+				coalesce(model,'') || ' ' ||
+				coalesce(notes,'')
+			) @@ websearch_to_tsquery('simple', ?)
+		) OR (
+			license_plate ILIKE ? OR brand ILIKE ? OR model ILIKE ?
+		)`,
+			search, like, like, like,
+		)
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	limit := filters.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+
+	err := q.
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(filters.Offset).
+		Find(&vehicles).Error
+
+	return vehicles, total, err
 }
 
 func (r *vehicleRepository) FindByID(id uuid.UUID) (*model.Vehicle, error) {
@@ -92,6 +130,5 @@ func (r *vehicleRepository) FindAllModelsByBrand(brandName string) ([]model.Mode
 		Select("m.*, b.id AS brand_id, b.name AS brand_name").
 		Joins("LEFT JOIN brands b ON m.brand_id = b.id").
 		Find(&models).Error
-
 	return models, err
 }

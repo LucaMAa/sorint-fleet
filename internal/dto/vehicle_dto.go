@@ -8,9 +8,9 @@ import (
 
 type CreateVehicleDto struct {
 	LicensePlate string `json:"license_plate" binding:"required"`
-	Brand        string `json:"brand" binding:"required"`
-	Model        string `json:"model" binding:"required"`
-	Year         int    `json:"year" binding:"required,min=1900"`
+	Brand        string `json:"brand"         binding:"required"`
+	Model        string `json:"model"         binding:"required"`
+	Year         int    `json:"year"          binding:"required,min=1900"`
 	Color        string `json:"color"`
 	FuelType     string `json:"fuel_type"`
 	Mileage      int    `json:"mileage"`
@@ -35,4 +35,13 @@ type AssignVehicleDto struct {
 type ListVehiclesDto struct {
 	Status       model.VehicleStatus
 	AssignedToID *uuid.UUID
+	Search       string
+	Limit        int
+	Offset       int
+}
+
+type ListUsersDto struct {
+	Search string
+	Limit  int
+	Offset int
 }

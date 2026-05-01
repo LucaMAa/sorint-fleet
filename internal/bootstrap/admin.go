@@ -30,12 +30,16 @@ func Admin() {
 	hash, _ := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
 
 	admin := model.User{
-		Email:    adminEmail,
-		Password: string(hash),
-		Role:     "admin",
+		Email:              adminEmail,
+		FirstName:          "Admin",
+		LastName:           "Fleet",
+		Password:           string(hash),
+		Role:               model.RoleAdmin,
+		Status:             model.StatusApproved,
+		MustChangePassword: true,
 	}
 
 	config.DB.Create(&admin)
 
-	log.Println("Admin created")
+	log.Println("Admin created — must change password on first login")
 }

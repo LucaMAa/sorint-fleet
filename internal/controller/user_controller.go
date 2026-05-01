@@ -3,6 +3,8 @@ package controller
 import (
 	"net/http"
 
+	"sorint-fleet/internal/dto"
+	"sorint-fleet/internal/model"
 	"sorint-fleet/internal/service"
 	"sorint-fleet/pkg/response"
 
@@ -19,15 +21,36 @@ func NewUserController(userSvc service.UserService) *UserController {
 }
 
 func (ctrl *UserController) List(c *gin.Context) {
-	users, err := ctrl.userSvc.List()
+	limit, offset := parsePageParams(c)
+
+	filters := dto.ListUsersDto{
+		Search: c.Query("search"),
+		Limit:  limit,
+		Offset: offset,
+	}
+
+	users, total, err := ctrl.userSvc.List(filters)
 	if err != nil {
 		response.InternalError(c, err)
 		return
 	}
 
-	response.OK(c, gin.H{
-		"users": users,
+	response.OK(c, dto.PaginatedResponse[model.User]{
+		Items:  users,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
 	})
+}
+
+func (ctrl *UserController) ListPending(c *gin.Context) {
+	users, err := ctrl.userSvc.ListPending()
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, gin.H{"users": users})
 }
 
 func (ctrl *UserController) GetByID(c *gin.Context) {
@@ -69,8 +92,47 @@ func (ctrl *UserController) UpdateRole(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"user":    user,
-	})
+	c.JSON(http.StatusOK, gin.H{"success": true, "user": user})
+}
+
+func (ctrl *UserController) Approve(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "Id not valid")
+		return
+	}
+
+	user, err := ctrl.userSvc.Approve(id)
+	if err != nil {
+		switch err.Error() {
+		case "user not found":
+			response.NotFound(c, err.Error())
+		default:
+			response.BadRequest(c, err.Error())
+		}
+		return
+	}
+
+	response.OK(c, user)
+}
+
+func (ctrl *UserController) Reject(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "Id not valid")
+		return
+	}
+
+	user, err := ctrl.userSvc.Reject(id)
+	if err != nil {
+		switch err.Error() {
+		case "user not found":
+			response.NotFound(c, err.Error())
+		default:
+			response.BadRequest(c, err.Error())
+		}
+		return
+	}
+
+	response.OK(c, user)
 }

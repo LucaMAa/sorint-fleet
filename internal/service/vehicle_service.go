@@ -18,7 +18,7 @@ import (
 type VehicleService interface {
 	Create(input dto.CreateVehicleDto) (*model.Vehicle, error)
 	Update(id uuid.UUID, input dto.UpdateVehicleDto) (*model.Vehicle, error)
-	List(filters dto.ListVehiclesDto) ([]model.Vehicle, error)
+	List(filters dto.ListVehiclesDto) ([]model.Vehicle, int64, error)
 	GetByID(id uuid.UUID) (*model.Vehicle, error)
 	Assign(vehicleID uuid.UUID, input dto.AssignVehicleDto) (*model.Vehicle, error)
 	Unassign(vehicleID uuid.UUID) (*model.Vehicle, error)
@@ -43,7 +43,6 @@ func NewVehicleService(
 }
 
 func (s *vehicleService) Create(input dto.CreateVehicleDto) (*model.Vehicle, error) {
-
 	if err := validator.Validate(input); err != nil {
 		return nil, err
 	}
@@ -79,10 +78,13 @@ func (s *vehicleService) Create(input dto.CreateVehicleDto) (*model.Vehicle, err
 	return vehicle, nil
 }
 
-func (s *vehicleService) List(filters dto.ListVehiclesDto) ([]model.Vehicle, error) {
+func (s *vehicleService) List(filters dto.ListVehiclesDto) ([]model.Vehicle, int64, error) {
 	return s.vehicleRepo.FindAll(repository.VehicleFilters{
 		Status:       filters.Status,
 		AssignedToID: filters.AssignedToID,
+		Search:       filters.Search,
+		Limit:        filters.Limit,
+		Offset:       filters.Offset,
 	})
 }
 
@@ -196,7 +198,6 @@ func (s *vehicleService) GetModelsByBrand(brandName string) ([]model.Model, erro
 }
 
 func (s *vehicleService) Update(id uuid.UUID, input dto.UpdateVehicleDto) (*model.Vehicle, error) {
-
 	if err := validator.Validate(input); err != nil {
 		return nil, err
 	}
@@ -253,7 +254,6 @@ func (s *vehicleService) ImportFromExcel(file io.Reader) (int, error) {
 	}
 
 	var rows [][]string
-
 	for _, sheet := range sheets {
 		r := f.GetRows(sheet)
 		if len(r) > 1 {
@@ -267,14 +267,11 @@ func (s *vehicleService) ImportFromExcel(file io.Reader) (int, error) {
 	}
 
 	count := 0
-
 	for i := 1; i < len(rows); i++ {
 		row := rows[i]
-
 		if len(row) < 4 {
 			continue
 		}
-
 		vehicle := &model.Vehicle{
 			LicensePlate: row[0],
 			Brand:        row[1],
@@ -286,7 +283,6 @@ func (s *vehicleService) ImportFromExcel(file io.Reader) (int, error) {
 			Notes:        pkg.GetOr(row, 7),
 			Status:       model.StatusAvailable,
 		}
-
 		if err := s.vehicleRepo.Create(vehicle); err == nil {
 			count++
 		}

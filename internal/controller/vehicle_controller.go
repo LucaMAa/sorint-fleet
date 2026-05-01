@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"strconv"
+
 	"sorint-fleet/internal/dto"
 	"sorint-fleet/internal/model"
 	"sorint-fleet/internal/service"
@@ -16,6 +18,22 @@ type VehicleController struct {
 
 func NewVehicleController(vehicleSvc service.VehicleService) *VehicleController {
 	return &VehicleController{vehicleSvc: vehicleSvc}
+}
+
+func parsePageParams(c *gin.Context) (limit, offset int) {
+	limit = 10
+	offset = 0
+	if l := c.Query("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 {
+			limit = v
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+	return
 }
 
 func (ctrl *VehicleController) Create(c *gin.Context) {
@@ -39,7 +57,13 @@ func (ctrl *VehicleController) Create(c *gin.Context) {
 }
 
 func (ctrl *VehicleController) List(c *gin.Context) {
-	filters := dto.ListVehiclesDto{}
+	limit, offset := parsePageParams(c)
+
+	filters := dto.ListVehiclesDto{
+		Search: c.Query("search"),
+		Limit:  limit,
+		Offset: offset,
+	}
 
 	if s := c.Query("status"); s != "" {
 		filters.Status = model.VehicleStatus(s)
@@ -53,13 +77,18 @@ func (ctrl *VehicleController) List(c *gin.Context) {
 		filters.AssignedToID = &uid
 	}
 
-	vehicles, err := ctrl.vehicleSvc.List(filters)
+	vehicles, total, err := ctrl.vehicleSvc.List(filters)
 	if err != nil {
 		response.InternalError(c, err)
 		return
 	}
 
-	response.OK(c, vehicles)
+	response.OK(c, dto.PaginatedResponse[model.Vehicle]{
+		Items:  vehicles,
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	})
 }
 
 func (ctrl *VehicleController) GetByID(c *gin.Context) {
@@ -152,7 +181,6 @@ func (vc *VehicleController) Brands(c *gin.Context) {
 
 func (vc *VehicleController) ModelsByBrand(c *gin.Context) {
 	brand := c.Query("brand")
-
 	models, _ := vc.vehicleSvc.GetModelsByBrand(brand)
 	c.JSON(200, models)
 }

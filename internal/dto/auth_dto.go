@@ -16,11 +16,17 @@ type LoginDto struct {
 }
 
 type AuthResponseDto struct {
-	Token        string      `json:"token"`
-	RefreshToken string      `json:"refresh_token"`
-	User         *model.User `json:"user"`
+	Token              string      `json:"token"`
+	RefreshToken       string      `json:"refresh_token"`
+	User               *model.User `json:"user"`
+	MustChangePassword bool        `json:"must_change_password"`
 }
 
 type GoogleAuthDto struct {
 	Token string `json:"token" binding:"required"`
+}
+
+type ChangePasswordDto struct {
+	CurrentPassword string `json:"current_password"`
+	NewPassword     string `json:"new_password" binding:"required,min=8"`
 }

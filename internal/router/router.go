@@ -5,6 +5,7 @@ import (
 	"sorint-fleet/internal/middleware"
 	"sorint-fleet/internal/repository"
 	"sorint-fleet/internal/service"
+	"sorint-fleet/internal/ws"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,6 +32,8 @@ func Setup() *gin.Engine {
 	vehicleCtrl := controller.NewVehicleController(vehicleSvc)
 	userCtrl := controller.NewUserController(userSvc)
 
+	r.GET("/ws", ws.ServeWS)
+
 	v1 := r.Group("/api/v1")
 	{
 		auth := v1.Group("/auth")
@@ -40,13 +43,17 @@ func Setup() *gin.Engine {
 			auth.POST("/refresh", authCtrl.Refresh)
 			auth.POST("/logout", authCtrl.Logout)
 			auth.POST("/google", authCtrl.Google)
+			auth.POST("/change-password", middleware.Auth(), authCtrl.ChangePassword)
 		}
 
 		users := v1.Group("/users", middleware.Auth(), middleware.RequireRole("admin"))
 		{
 			users.GET("", userCtrl.List)
+			users.GET("/pending", userCtrl.ListPending)
 			users.GET("/:id", userCtrl.GetByID)
 			users.PATCH("/:id/role", userCtrl.UpdateRole)
+			users.POST("/:id/approve", userCtrl.Approve)
+			users.POST("/:id/reject", userCtrl.Reject)
 			users.GET("/:id/history", assignmentCtrl.UserHistory)
 		}
 
