@@ -29,18 +29,17 @@ type VehicleService interface {
 }
 
 type vehicleService struct {
-	vehicleRepo repository.VehicleRepository
-	userRepo    repository.UserRepository
+	vehicleRepo    repository.VehicleRepository
+	userRepo       repository.UserRepository
+	assignmentRepo repository.VehicleAssignmentRepository
 }
 
 func NewVehicleService(
 	vehicleRepo repository.VehicleRepository,
 	userRepo repository.UserRepository,
+	assignmentRepo repository.VehicleAssignmentRepository,
 ) VehicleService {
-	return &vehicleService{
-		vehicleRepo: vehicleRepo,
-		userRepo:    userRepo,
-	}
+	return &vehicleService{vehicleRepo, userRepo, assignmentRepo}
 }
 
 func (s *vehicleService) Create(input dto.CreateVehicleDto) (*model.Vehicle, error) {
@@ -130,6 +129,15 @@ func (s *vehicleService) Assign(vehicleID uuid.UUID, input dto.AssignVehicleDto)
 		return nil, err
 	}
 
+	assignment := &model.VehicleAssignment{
+		VehicleID: vehicleID,
+		UserID:    input.UserID,
+		StartedAt: now,
+	}
+	if err := s.assignmentRepo.Create(assignment); err != nil {
+		return nil, err
+	}
+
 	return s.vehicleRepo.FindByID(vehicleID)
 }
 
@@ -153,6 +161,10 @@ func (s *vehicleService) Unassign(vehicleID uuid.UUID) (*model.Vehicle, error) {
 	if err := s.vehicleRepo.Update(vehicle); err != nil {
 		return nil, err
 	}
+	if err := s.assignmentRepo.CloseActive(vehicleID); err != nil {
+		return nil, err
+	}
+
 	return vehicle, nil
 }
 

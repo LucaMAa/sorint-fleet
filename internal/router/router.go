@@ -19,8 +19,12 @@ func Setup() *gin.Engine {
 
 	refreshRepo := repository.NewRefreshTokenRepository()
 
+	assignmentRepo := repository.NewVehicleAssignmentRepository()
+	assignmentSvc := service.NewVehicleAssignmentService(assignmentRepo)
+	assignmentCtrl := controller.NewVehicleAssignmentController(assignmentSvc)
+
 	authSvc := service.NewAuthService(userRepo, refreshRepo)
-	vehicleSvc := service.NewVehicleService(vehicleRepo, userRepo)
+	vehicleSvc := service.NewVehicleService(vehicleRepo, userRepo, assignmentRepo)
 	userSvc := service.NewUserService(userRepo)
 
 	authCtrl := controller.NewAuthController(authSvc)
@@ -43,6 +47,7 @@ func Setup() *gin.Engine {
 			users.GET("", userCtrl.List)
 			users.GET("/:id", userCtrl.GetByID)
 			users.PATCH("/:id/role", userCtrl.UpdateRole)
+			users.GET("/:id/history", assignmentCtrl.UserHistory)
 		}
 
 		vehicles := v1.Group("/vehicles", middleware.Auth(), middleware.RequireRole("admin"))
@@ -56,6 +61,7 @@ func Setup() *gin.Engine {
 			vehicles.PATCH("/:id/unassign", middleware.RequireRole("admin"), vehicleCtrl.Unassign)
 			vehicles.DELETE("/:id", middleware.RequireRole("admin"), vehicleCtrl.Delete)
 			vehicles.POST("/import", middleware.RequireRole("admin"), vehicleCtrl.ImportExcel)
+			vehicles.GET("/:id/history", assignmentCtrl.VehicleHistory)
 		}
 
 		vehicleMeta := v1.Group("/vehicle-meta", middleware.Auth(), middleware.RequireRole("admin"))

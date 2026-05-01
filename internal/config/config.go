@@ -79,6 +79,7 @@ func InitDB(config *DatabaseConfig) {
 		&model.Vehicle{},
 		&model.Brand{},
 		&model.Model{},
+		&model.VehicleAssignment{},
 	); err != nil {
 		log.Fatalf("error during automigrate: %v", err)
 	}
