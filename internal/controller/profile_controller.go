@@ -128,7 +128,7 @@ func (ctrl *ProfileController) DisableAccount(c *gin.Context) {
 	if !ok {
 		return
 	}
- 
+
 	var body struct {
 		Password string `json:"password" binding:"required"`
 	}
@@ -136,11 +136,11 @@ func (ctrl *ProfileController) DisableAccount(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
- 
+
 	if err := ctrl.profileSvc.DisableAccount(uid, body.Password); err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
- 
+
 	response.OK(c, gin.H{"message": "Account disabilitato"})
 }

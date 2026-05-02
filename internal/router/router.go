@@ -71,6 +71,8 @@ func Setup() *gin.Engine {
 			users.PATCH("/:id/role", userCtrl.UpdateRole)
 			users.POST("/:id/approve", userCtrl.Approve)
 			users.POST("/:id/reject", userCtrl.Reject)
+			users.POST("/:id/enable", userCtrl.Enable)
+			users.POST("/:id/disable", userCtrl.Disable)
 			users.GET("/:id/history", assignmentCtrl.UserHistory)
 		}
 

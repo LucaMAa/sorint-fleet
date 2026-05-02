@@ -20,6 +20,8 @@ type UserService interface {
 	ListPending() ([]model.User, error)
 	Approve(id uuid.UUID) (*model.User, error)
 	Reject(id uuid.UUID) (*model.User, error)
+	Enable(id uuid.UUID) (*model.User, error)
+	Disable(id uuid.UUID) (*model.User, error)
 }
 
 type userService struct {
@@ -131,6 +133,46 @@ func (s *userService) Reject(id uuid.UUID) (*model.User, error) {
 		"id":    user.ID,
 		"email": user.Email,
 	})
+
+	return user, nil
+}
+
+func (s *userService) Enable(id uuid.UUID) (*model.User, error) {
+	user, err := s.userRepo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("user not found")
+	}
+	if user.Status != model.StatusDisabled {
+		return nil, errors.New("user is not disabled")
+	}
+
+	user.Status = model.StatusApproved
+	if err := s.userRepo.Save(user); err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (s *userService) Disable(id uuid.UUID) (*model.User, error) {
+	user, err := s.userRepo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("user not found")
+	}
+	if user.Status == model.StatusDisabled {
+		return nil, errors.New("user is already disabled")
+	}
+
+	user.Status = model.StatusDisabled
+	if err := s.userRepo.Save(user); err != nil {
+		return nil, err
+	}
 
 	return user, nil
 }

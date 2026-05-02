@@ -136,3 +136,45 @@ func (ctrl *UserController) Reject(c *gin.Context) {
 
 	response.OK(c, user)
 }
+
+func (ctrl *UserController) Enable(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "Id not valid")
+		return
+	}
+
+	user, err := ctrl.userSvc.Enable(id)
+	if err != nil {
+		switch err.Error() {
+		case "user not found":
+			response.NotFound(c, err.Error())
+		default:
+			response.BadRequest(c, err.Error())
+		}
+		return
+	}
+
+	response.OK(c, user)
+}
+
+func (ctrl *UserController) Disable(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "Id not valid")
+		return
+	}
+
+	user, err := ctrl.userSvc.Disable(id)
+	if err != nil {
+		switch err.Error() {
+		case "user not found":
+			response.NotFound(c, err.Error())
+		default:
+			response.BadRequest(c, err.Error())
+		}
+		return
+	}
+
+	response.OK(c, user)
+}
