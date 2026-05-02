@@ -2,8 +2,10 @@ package service
 
 import (
 	"errors"
+	"log"
 
 	"sorint-fleet/internal/dto"
+	"sorint-fleet/internal/mailer"
 	"sorint-fleet/internal/model"
 	"sorint-fleet/internal/repository"
 	"sorint-fleet/internal/ws"
@@ -98,6 +100,12 @@ func (s *userService) Approve(id uuid.UUID) (*model.User, error) {
 		"id":    user.ID,
 		"email": user.Email,
 	})
+
+	go func() {
+		if err := mailer.SendApprovalEmail(user.Email, user.FirstName); err != nil {
+			log.Printf("⚠️  Email approvazione non inviata a %s: %v", user.Email, err)
+		}
+	}()
 
 	return user, nil
 }

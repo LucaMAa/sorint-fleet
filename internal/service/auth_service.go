@@ -3,11 +3,13 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"os"
 	"time"
 
 	"sorint-fleet/internal/config"
 	"sorint-fleet/internal/dto"
+	"sorint-fleet/internal/mailer"
 	"sorint-fleet/internal/model"
 	"sorint-fleet/internal/repository"
 	"sorint-fleet/internal/ws"
@@ -24,18 +26,22 @@ type AuthService interface {
 	Logout(refreshToken string) error
 	GoogleLogin(token string) (*dto.AuthResponseDto, error)
 	ChangePassword(userID uuid.UUID, input dto.ChangePasswordDto) error
+	RequestPasswordReset(email string) error
+	ResetPassword(token, newPassword string) error
 }
 
 type authService struct {
 	userRepo    repository.UserRepository
 	refreshRepo repository.RefreshTokenRepository
+	resetRepo   repository.PasswordResetRepository
 }
 
 func NewAuthService(
 	userRepo repository.UserRepository,
 	refreshRepo repository.RefreshTokenRepository,
+	resetRepo repository.PasswordResetRepository,
 ) AuthService {
-	return &authService{userRepo: userRepo, refreshRepo: refreshRepo}
+	return &authService{userRepo: userRepo, refreshRepo: refreshRepo, resetRepo: resetRepo}
 }
 
 func (s *authService) Register(input dto.RegisterDto) error {
@@ -90,6 +96,10 @@ func (s *authService) Login(input dto.LoginDto) (*dto.AuthResponseDto, error) {
 	}
 	if user.Status == model.StatusRejected {
 		return nil, errors.New("account_rejected")
+	}
+
+	if user.Status == model.StatusDisabled {
+		return nil, errors.New("account_disabled")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
@@ -213,6 +223,10 @@ func (s *authService) GoogleLogin(googleToken string) (*dto.AuthResponseDto, err
 		return nil, errors.New("account_rejected")
 	}
 
+	if user.Status == model.StatusDisabled {
+		return nil, errors.New("account_disabled")
+	}
+
 	token, err := config.GenerateToken(user.ID, string(user.Role))
 	if err != nil {
 		return nil, err
@@ -245,4 +259,66 @@ func (s *authService) ChangePassword(userID uuid.UUID, input dto.ChangePasswordD
 	user.Password = string(hash)
 	user.MustChangePassword = false
 	return s.userRepo.Save(user)
+}
+
+func (s *authService) RequestPasswordReset(email string) error {
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil {
+		return err
+	}
+	if user == nil || user.Password == "" {
+		return nil
+	}
+
+	s.resetRepo.DeleteByUserID(user.ID.String())
+
+	token := uuid.NewString()
+	s.resetRepo.Create(&model.PasswordReset{
+		UserID:    user.ID.String(),
+		Token:     token,
+		ExpiresAt: time.Now().Add(30 * time.Minute),
+	})
+
+	go func() {
+		if err := mailer.SendResetPasswordEmail(user.Email, user.FirstName, token); err != nil {
+			log.Printf("⚠️  Reset email non inviata a %s: %v", user.Email, err)
+		}
+	}()
+
+	return nil
+}
+
+func (s *authService) ResetPassword(token, newPassword string) error {
+	pr, err := s.resetRepo.FindByToken(token)
+	if err != nil || pr == nil {
+		return errors.New("token non valido o scaduto")
+	}
+
+	uid, err := uuid.Parse(pr.UserID)
+	if err != nil {
+		return errors.New("token non valido")
+	}
+
+	user, err := s.userRepo.FindByID(uid)
+	if err != nil || user == nil {
+		return errors.New("utente non trovato")
+	}
+
+	if len(newPassword) < 8 {
+		return errors.New("la password deve essere di almeno 8 caratteri")
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	user.Password = string(hash)
+	user.MustChangePassword = false
+	if err := s.userRepo.Save(user); err != nil {
+		return err
+	}
+
+	s.resetRepo.DeleteByUserID(pr.UserID)
+	return nil
 }

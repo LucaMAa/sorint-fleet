@@ -80,6 +80,8 @@ func InitDB(config *DatabaseConfig) {
 		&model.Brand{},
 		&model.Model{},
 		&model.VehicleAssignment{},
+		&model.PasswordReset{},
+		&model.EmailChange{},
 	); err != nil {
 		log.Fatalf("error during automigrate: %v", err)
 	}

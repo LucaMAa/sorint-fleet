@@ -55,6 +55,8 @@ func (ctrl *AuthController) Login(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "account_pending"})
 		case "account_rejected":
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "account_rejected"})
+		case "account_disabled":
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "account_disabled"})
 		default:
 			response.Unauthorized(c, err.Error())
 		}
@@ -146,5 +148,33 @@ func (ctrl *AuthController) ChangePassword(c *gin.Context) {
 		return
 	}
 
+	response.OK(c, gin.H{"message": "Password aggiornata con successo"})
+}
+
+func (ctrl *AuthController) RequestPasswordReset(c *gin.Context) {
+	var body struct {
+		Email string `json:"email" binding:"required,email"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	_ = ctrl.authSvc.RequestPasswordReset(body.Email)
+	response.OK(c, gin.H{"message": "Se l'email esiste riceverai le istruzioni"})
+}
+
+func (ctrl *AuthController) ResetPassword(c *gin.Context) {
+	var body struct {
+		Token       string `json:"token"        binding:"required"`
+		NewPassword string `json:"new_password" binding:"required,min=8"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+	if err := ctrl.authSvc.ResetPassword(body.Token, body.NewPassword); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	response.OK(c, gin.H{"message": "Password aggiornata con successo"})
 }

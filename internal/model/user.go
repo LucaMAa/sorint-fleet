@@ -20,6 +20,7 @@ const (
 	StatusPending  UserStatus = "pending"
 	StatusApproved UserStatus = "approved"
 	StatusRejected UserStatus = "rejected"
+	StatusDisabled UserStatus = "disabled"
 )
 
 type User struct {

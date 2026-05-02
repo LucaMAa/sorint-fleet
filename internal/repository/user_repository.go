@@ -61,7 +61,7 @@ func (r *userRepository) FindAll(filters UserFilters) ([]model.User, int64, erro
 	var users []model.User
 	var total int64
 
-	q := r.db.Model(&model.User{}).Where("status = ?", model.StatusApproved)
+	q := r.db.Model(&model.User{})
 
 	if filters.Search != "" {
 		search := filters.Search

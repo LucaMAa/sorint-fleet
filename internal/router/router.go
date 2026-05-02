@@ -19,18 +19,22 @@ func Setup() *gin.Engine {
 	vehicleRepo := repository.NewVehicleRepository()
 
 	refreshRepo := repository.NewRefreshTokenRepository()
+	resetRepo := repository.NewPasswordResetRepository()
+	emailChangeRepo := repository.NewEmailChangeRepository()
 
 	assignmentRepo := repository.NewVehicleAssignmentRepository()
 	assignmentSvc := service.NewVehicleAssignmentService(assignmentRepo)
 	assignmentCtrl := controller.NewVehicleAssignmentController(assignmentSvc)
 
-	authSvc := service.NewAuthService(userRepo, refreshRepo)
+	authSvc := service.NewAuthService(userRepo, refreshRepo, resetRepo)
 	vehicleSvc := service.NewVehicleService(vehicleRepo, userRepo, assignmentRepo)
 	userSvc := service.NewUserService(userRepo)
+	profileSvc := service.NewProfileService(userRepo, emailChangeRepo)
 
 	authCtrl := controller.NewAuthController(authSvc)
 	vehicleCtrl := controller.NewVehicleController(vehicleSvc)
 	userCtrl := controller.NewUserController(userSvc)
+	profileCtrl := controller.NewProfileController(profileSvc)
 
 	r.GET("/ws", ws.ServeWS)
 
@@ -44,7 +48,20 @@ func Setup() *gin.Engine {
 			auth.POST("/logout", authCtrl.Logout)
 			auth.POST("/google", authCtrl.Google)
 			auth.POST("/change-password", middleware.Auth(), authCtrl.ChangePassword)
+			auth.POST("/request-reset", authCtrl.RequestPasswordReset)
+			auth.POST("/reset-password", authCtrl.ResetPassword)
 		}
+
+		profile := v1.Group("/profile", middleware.Auth())
+		{
+			profile.GET("", profileCtrl.GetProfile)
+			profile.PATCH("", profileCtrl.UpdateProfile)
+			profile.POST("/request-email-change", profileCtrl.RequestEmailChange)
+			profile.POST("/change-password", profileCtrl.ChangePassword)
+			profile.POST("/disable", profileCtrl.DisableAccount)
+		}
+
+		v1.POST("/confirm-email", profileCtrl.ConfirmEmailChange)
 
 		users := v1.Group("/users", middleware.Auth(), middleware.RequireRole("admin"))
 		{
