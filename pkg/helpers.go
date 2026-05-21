@@ -13,3 +13,4 @@ func GetOr(row []string, idx int) string {
 	}
 	return ""
 }
+

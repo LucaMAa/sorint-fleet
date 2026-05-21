@@ -2,98 +2,102 @@ package router
 
 import (
 	"sorint-fleet/internal/controller"
+	"sorint-fleet/internal/gotenberg"
 	"sorint-fleet/internal/middleware"
 	"sorint-fleet/internal/repository"
 	"sorint-fleet/internal/service"
+	"sorint-fleet/internal/session"
 	"sorint-fleet/internal/ws"
 
 	"github.com/gin-gonic/gin"
 )
 
-func Setup() *gin.Engine {
+func Setup(sessionStore *session.Store) *gin.Engine {
 	r := gin.Default()
-
 	r.Use(corsMiddleware())
 
-	userRepo := repository.NewUserRepository()
-	vehicleRepo := repository.NewVehicleRepository()
+	gClient := gotenberg.NewClient("")
 
-	refreshRepo := repository.NewRefreshTokenRepository()
-	resetRepo := repository.NewPasswordResetRepository()
+	userRepo        := repository.NewUserRepository()
+	vehicleRepo     := repository.NewVehicleRepository()
+	resetRepo       := repository.NewPasswordResetRepository()
 	emailChangeRepo := repository.NewEmailChangeRepository()
+	assignmentRepo  := repository.NewVehicleAssignmentRepository()
 
-	assignmentRepo := repository.NewVehicleAssignmentRepository()
+	authSvc       := service.NewAuthService(userRepo, resetRepo, sessionStore)
+	vehicleSvc    := service.NewVehicleService(vehicleRepo, userRepo, assignmentRepo)
+	userSvc       := service.NewUserService(userRepo, sessionStore)
+	profileSvc    := service.NewProfileService(userRepo, emailChangeRepo, sessionStore)
 	assignmentSvc := service.NewVehicleAssignmentService(assignmentRepo)
+	pdfGen        := gotenberg.NewGenerator(gClient)
+	pdfSvc        := service.NewPDFService(pdfGen, "")
+
+	authCtrl       := controller.NewAuthController(authSvc)
+	vehicleCtrl    := controller.NewVehicleController(vehicleSvc, pdfSvc)
+	userCtrl       := controller.NewUserController(userSvc)
+	profileCtrl    := controller.NewProfileController(profileSvc)
 	assignmentCtrl := controller.NewVehicleAssignmentController(assignmentSvc)
 
-	authSvc := service.NewAuthService(userRepo, refreshRepo, resetRepo)
-	vehicleSvc := service.NewVehicleService(vehicleRepo, userRepo, assignmentRepo)
-	userSvc := service.NewUserService(userRepo)
-	profileSvc := service.NewProfileService(userRepo, emailChangeRepo)
-
-	authCtrl := controller.NewAuthController(authSvc)
-	vehicleCtrl := controller.NewVehicleController(vehicleSvc)
-	userCtrl := controller.NewUserController(userSvc)
-	profileCtrl := controller.NewProfileController(profileSvc)
+	auth      := middleware.Auth(sessionStore)
+	adminOnly := middleware.RequireRole("admin")
 
 	r.GET("/ws", ws.ServeWS)
 
 	v1 := r.Group("/api")
 	{
-		auth := v1.Group("/auth")
+		authG := v1.Group("/auth")
 		{
-			auth.POST("/register", authCtrl.Register)
-			auth.POST("/login", authCtrl.Login)
-			auth.POST("/refresh", authCtrl.Refresh)
-			auth.POST("/logout", authCtrl.Logout)
-			auth.POST("/google", authCtrl.Google)
-			auth.POST("/change-password", middleware.Auth(), authCtrl.ChangePassword)
-			auth.POST("/request-reset", authCtrl.RequestPasswordReset)
-			auth.POST("/reset-password", authCtrl.ResetPassword)
-		}
-
-		profile := v1.Group("/profile", middleware.Auth())
-		{
-			profile.GET("", profileCtrl.GetProfile)
-			profile.PATCH("", profileCtrl.UpdateProfile)
-			profile.POST("/request-email-change", profileCtrl.RequestEmailChange)
-			profile.POST("/change-password", profileCtrl.ChangePassword)
-			profile.POST("/disable", profileCtrl.DisableAccount)
+			authG.POST("/register",       authCtrl.Register)
+			authG.POST("/login",          authCtrl.Login)
+			authG.POST("/logout",         auth, authCtrl.Logout)
+			authG.POST("/google",         authCtrl.Google)
+			authG.POST("/change-password",auth, authCtrl.ChangePassword)
+			authG.POST("/request-reset",  authCtrl.RequestPasswordReset)
+			authG.POST("/reset-password", authCtrl.ResetPassword)
 		}
 
 		v1.POST("/confirm-email", profileCtrl.ConfirmEmailChange)
 
-		users := v1.Group("/users", middleware.Auth(), middleware.RequireRole("admin"))
+		profileG := v1.Group("/profile", auth)
 		{
-			users.GET("", userCtrl.List)
-			users.GET("/pending", userCtrl.ListPending)
-			users.GET("/:id", userCtrl.GetByID)
-			users.PATCH("/:id/role", userCtrl.UpdateRole)
-			users.POST("/:id/approve", userCtrl.Approve)
-			users.POST("/:id/reject", userCtrl.Reject)
-			users.POST("/:id/enable", userCtrl.Enable)
-			users.POST("/:id/disable", userCtrl.Disable)
-			users.GET("/:id/history", assignmentCtrl.UserHistory)
+			profileG.GET("",                       profileCtrl.GetProfile)
+			profileG.PATCH("",                     profileCtrl.UpdateProfile)
+			profileG.POST("/request-email-change", profileCtrl.RequestEmailChange)
+			profileG.POST("/change-password",      profileCtrl.ChangePassword)
+			profileG.POST("/disable",              profileCtrl.DisableAccount)
 		}
 
-		vehicles := v1.Group("/vehicles", middleware.Auth(), middleware.RequireRole("admin"))
+		usersG := v1.Group("/users", auth, adminOnly)
 		{
-			vehicles.GET("", vehicleCtrl.List)
-			vehicles.GET("/:id", vehicleCtrl.GetByID)
-
-			vehicles.POST("", middleware.RequireRole("admin"), vehicleCtrl.Create)
-			vehicles.PATCH("/:id", middleware.RequireRole("admin"), vehicleCtrl.Update)
-			vehicles.PATCH("/:id/assign", middleware.RequireRole("admin"), vehicleCtrl.Assign)
-			vehicles.PATCH("/:id/unassign", middleware.RequireRole("admin"), vehicleCtrl.Unassign)
-			vehicles.DELETE("/:id", middleware.RequireRole("admin"), vehicleCtrl.Delete)
-			vehicles.POST("/import", middleware.RequireRole("admin"), vehicleCtrl.ImportExcel)
-			vehicles.GET("/:id/history", assignmentCtrl.VehicleHistory)
+			usersG.GET("",              userCtrl.List)
+			usersG.GET("/pending",      userCtrl.ListPending)
+			usersG.GET("/:id",         userCtrl.GetByID)
+			usersG.PATCH("/:id/role",  userCtrl.UpdateRole)
+			usersG.POST("/:id/approve",userCtrl.Approve)
+			usersG.POST("/:id/reject", userCtrl.Reject)
+			usersG.POST("/:id/enable", userCtrl.Enable)
+			usersG.POST("/:id/disable",userCtrl.Disable)
+			usersG.GET("/:id/history", assignmentCtrl.UserHistory)
 		}
 
-		vehicleMeta := v1.Group("/vehicle-meta", middleware.Auth(), middleware.RequireRole("admin"))
+		vehiclesG := v1.Group("/vehicles", auth, adminOnly)
 		{
-			vehicleMeta.GET("/brands", vehicleCtrl.Brands)
-			vehicleMeta.GET("/models", vehicleCtrl.ModelsByBrand)
+			vehiclesG.GET("",                  vehicleCtrl.List)
+			vehiclesG.GET("/:id",              vehicleCtrl.GetByID)
+			vehiclesG.POST("",                 vehicleCtrl.Create)
+			vehiclesG.PATCH("/:id",            vehicleCtrl.Update)
+			vehiclesG.PATCH("/:id/assign",     vehicleCtrl.Assign)
+			vehiclesG.PATCH("/:id/unassign",   vehicleCtrl.Unassign)
+			vehiclesG.DELETE("/:id",           vehicleCtrl.Delete)
+			vehiclesG.POST("/import",          vehicleCtrl.ImportExcel)
+			vehiclesG.GET("/:id/history",      assignmentCtrl.VehicleHistory)
+			vehiclesG.GET("/:id/assignment-pdf", vehicleCtrl.AssignmentPDF)
+		}
+
+		metaG := v1.Group("/vehicle-meta", auth, adminOnly)
+		{
+			metaG.GET("/brands", vehicleCtrl.Brands)
+			metaG.GET("/models", vehicleCtrl.ModelsByBrand)
 		}
 	}
 
@@ -102,7 +106,12 @@ func Setup() *gin.Engine {
 
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		if origin == "" {
+			origin = "*"
+		}
+		c.Header("Access-Control-Allow-Origin", origin)
+		c.Header("Access-Control-Allow-Credentials", "true")
 		c.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type,Authorization")
 

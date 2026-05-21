@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
@@ -8,11 +9,17 @@ import (
 	"sorint-fleet/internal/config"
 	"sorint-fleet/internal/cron"
 	"sorint-fleet/internal/router"
+	"sorint-fleet/internal/session"
 )
 
 func main() {
 	cfg := config.LoadConfig()
 	config.InitDB(cfg)
+
+	sessionStore := session.New()
+	if err := sessionStore.Ping(context.Background()); err != nil {
+		log.Fatalf("Redis not available: %v", err)
+	}
 
 	bootstrap.Admin()
 
@@ -25,8 +32,7 @@ func main() {
 	c.Start()
 	defer c.Stop()
 
-	r := router.Setup()
+	r := router.Setup(sessionStore)
 
-	log.Printf("Sorint Fleet API avviata su :%s", port)
 	r.Run(":" + port)
 }

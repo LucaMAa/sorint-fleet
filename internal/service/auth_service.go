@@ -4,44 +4,88 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
-	"sorint-fleet/internal/config"
 	"sorint-fleet/internal/dto"
 	"sorint-fleet/internal/mailer"
 	"sorint-fleet/internal/model"
 	"sorint-fleet/internal/repository"
+	"sorint-fleet/internal/session"
 	"sorint-fleet/internal/ws"
 
 	"cloud.google.com/go/auth/credentials/idtoken"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
+const cookieMaxAge = int(24 * time.Hour / time.Second)
 
 type AuthService interface {
-	Register(input dto.RegisterDto) error
-	Login(input dto.LoginDto) (*dto.AuthResponseDto, error)
-	Refresh(refreshToken string) (*dto.AuthResponseDto, error)
-	Logout(refreshToken string) error
-	GoogleLogin(token string) (*dto.AuthResponseDto, error)
-	ChangePassword(userID uuid.UUID, input dto.ChangePasswordDto) error
+	Login(ctx context.Context, input dto.LoginDto, w http.ResponseWriter) (*dto.AuthResponseDto, error)
+	Logout(ctx context.Context, sessionID string, w http.ResponseWriter) error
+	GoogleLogin(ctx context.Context, token string, w http.ResponseWriter) (*dto.AuthResponseDto, error)
+	ChangePassword(ctx context.Context, userID uuid.UUID, input dto.ChangePasswordDto) error
 	RequestPasswordReset(email string) error
 	ResetPassword(token, newPassword string) error
+	Register(input dto.RegisterDto) error
 }
 
 type authService struct {
-	userRepo    repository.UserRepository
-	refreshRepo repository.RefreshTokenRepository
-	resetRepo   repository.PasswordResetRepository
+	userRepo  repository.UserRepository
+	resetRepo repository.PasswordResetRepository
+	sessions  *session.Store
 }
 
 func NewAuthService(
 	userRepo repository.UserRepository,
-	refreshRepo repository.RefreshTokenRepository,
 	resetRepo repository.PasswordResetRepository,
+	sessions *session.Store,
 ) AuthService {
-	return &authService{userRepo: userRepo, refreshRepo: refreshRepo, resetRepo: resetRepo}
+	return &authService{
+		userRepo:  userRepo,
+		resetRepo: resetRepo,
+		sessions:  sessions,
+	}
+}
+
+func (s *authService) createSession(ctx context.Context, user *model.User, w http.ResponseWriter) error {
+	sessID, err := s.sessions.Create(ctx, session.Data{
+		UserID: user.ID,
+		Role:   string(user.Role),
+	})
+	if err != nil {
+		return err
+	}
+	if err := s.sessions.TrackUserSession(ctx, user.ID, sessID); err != nil {
+		log.Printf("⚠️  TrackUserSession: %v", err)
+	}
+	setSessionCookie(w, sessID)
+	return nil
+}
+
+func setSessionCookie(w http.ResponseWriter, sessionID string) {
+	secure := os.Getenv("COOKIE_SECURE") == "true"
+	http.SetCookie(w, &http.Cookie{
+		Name:     session.CookieName,
+		Value:    sessionID,
+		Path:     "/",
+		MaxAge:   cookieMaxAge,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     session.CookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func (s *authService) Register(input dto.RegisterDto) error {
@@ -66,7 +110,6 @@ func (s *authService) Register(input dto.RegisterDto) error {
 		Role:      model.RoleUser,
 		Status:    model.StatusPending,
 	}
-
 	if err := s.userRepo.Create(user); err != nil {
 		return err
 	}
@@ -78,11 +121,11 @@ func (s *authService) Register(input dto.RegisterDto) error {
 		"email":      user.Email,
 		"created_at": user.CreatedAt,
 	})
-
 	return nil
 }
 
-func (s *authService) Login(input dto.LoginDto) (*dto.AuthResponseDto, error) {
+
+func (s *authService) Login(ctx context.Context, input dto.LoginDto, w http.ResponseWriter) (*dto.AuthResponseDto, error) {
 	user, err := s.userRepo.FindByEmail(input.Email)
 	if err != nil {
 		return nil, err
@@ -91,14 +134,12 @@ func (s *authService) Login(input dto.LoginDto) (*dto.AuthResponseDto, error) {
 		return nil, errors.New("not valid credentials")
 	}
 
-	if user.Status == model.StatusPending {
+	switch user.Status {
+	case model.StatusPending:
 		return nil, errors.New("account_pending")
-	}
-	if user.Status == model.StatusRejected {
+	case model.StatusRejected:
 		return nil, errors.New("account_rejected")
-	}
-
-	if user.Status == model.StatusDisabled {
+	case model.StatusDisabled:
 		return nil, errors.New("account_disabled")
 	}
 
@@ -106,88 +147,39 @@ func (s *authService) Login(input dto.LoginDto) (*dto.AuthResponseDto, error) {
 		return nil, errors.New("not valid credentials")
 	}
 
-	token, err := config.GenerateToken(user.ID, string(user.Role))
-	if err != nil {
+	if err := s.createSession(ctx, user, w); err != nil {
 		return nil, err
 	}
 
-	refresh := uuid.NewString()
-	s.refreshRepo.Create(&model.RefreshToken{
-		UserID:    user.ID,
-		Token:     refresh,
-		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
-	})
-
 	return &dto.AuthResponseDto{
-		Token:              token,
-		RefreshToken:       refresh,
 		User:               user,
 		MustChangePassword: user.MustChangePassword,
 	}, nil
 }
 
-func (s *authService) Refresh(refreshToken string) (*dto.AuthResponseDto, error) {
-	rt, err := s.refreshRepo.Find(refreshToken)
-	if err != nil {
-		return nil, errors.New("invalid refresh token")
+
+func (s *authService) Logout(ctx context.Context, sessionID string, w http.ResponseWriter) error {
+	clearSessionCookie(w)
+	if sessionID == "" {
+		return nil
 	}
-
-	if time.Now().After(rt.ExpiresAt) {
-		s.refreshRepo.Delete(refreshToken)
-		return nil, errors.New("refresh token expired")
-	}
-
-	user, err := s.userRepo.FindByID(rt.UserID)
-	if err != nil || user == nil {
-		return nil, errors.New("user not found")
-	}
-
-	s.refreshRepo.Delete(refreshToken)
-
-	newRefresh := uuid.NewString()
-	s.refreshRepo.Create(&model.RefreshToken{
-		UserID:    user.ID,
-		Token:     newRefresh,
-		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
-	})
-
-	token, _ := config.GenerateToken(user.ID, string(user.Role))
-
-	return &dto.AuthResponseDto{
-		Token:              token,
-		RefreshToken:       newRefresh,
-		User:               user,
-		MustChangePassword: user.MustChangePassword,
-	}, nil
+	return s.sessions.Delete(ctx, sessionID)
 }
 
-func (s *authService) Logout(refreshToken string) error {
-	if refreshToken == "" {
-		return errors.New("missing refresh token")
-	}
-	return s.refreshRepo.Delete(refreshToken)
-}
 
-func (s *authService) GoogleLogin(googleToken string) (*dto.AuthResponseDto, error) {
+func (s *authService) GoogleLogin(ctx context.Context, googleToken string, w http.ResponseWriter) (*dto.AuthResponseDto, error) {
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
 
-	payload, err := idtoken.Validate(context.Background(), googleToken, clientID)
+	payload, err := idtoken.Validate(ctx, googleToken, clientID)
 	if err != nil {
 		return nil, errors.New("invalid google token")
 	}
 
-	email := payload.Claims["email"].(string)
-	firstName, lastName := "", ""
-	if v, ok := payload.Claims["given_name"].(string); ok {
-		firstName = v
-	}
-	if v, ok := payload.Claims["family_name"].(string); ok {
-		lastName = v
-	}
+	email, _ := payload.Claims["email"].(string)
+	firstName, _ := payload.Claims["given_name"].(string)
+	lastName, _ := payload.Claims["family_name"].(string)
 	if firstName == "" {
-		if v, ok := payload.Claims["name"].(string); ok {
-			firstName = v
-		}
+		firstName, _ = payload.Claims["name"].(string)
 	}
 
 	user, err := s.userRepo.FindByEmail(email)
@@ -216,26 +208,26 @@ func (s *authService) GoogleLogin(googleToken string) (*dto.AuthResponseDto, err
 		return nil, errors.New("account_pending")
 	}
 
-	if user.Status == model.StatusPending {
+	switch user.Status {
+	case model.StatusPending:
 		return nil, errors.New("account_pending")
-	}
-	if user.Status == model.StatusRejected {
+	case model.StatusRejected:
 		return nil, errors.New("account_rejected")
-	}
-
-	if user.Status == model.StatusDisabled {
+	case model.StatusDisabled:
 		return nil, errors.New("account_disabled")
 	}
 
-	token, err := config.GenerateToken(user.ID, string(user.Role))
-	if err != nil {
+	if err := s.createSession(ctx, user, w); err != nil {
 		return nil, err
 	}
 
-	return &dto.AuthResponseDto{Token: token, User: user}, nil
+	return &dto.AuthResponseDto{
+		User:               user,
+		MustChangePassword: user.MustChangePassword,
+	}, nil
 }
 
-func (s *authService) ChangePassword(userID uuid.UUID, input dto.ChangePasswordDto) error {
+func (s *authService) ChangePassword(ctx context.Context, userID uuid.UUID, input dto.ChangePasswordDto) error {
 	user, err := s.userRepo.FindByID(userID)
 	if err != nil || user == nil {
 		return errors.New("user not found")
@@ -284,7 +276,6 @@ func (s *authService) RequestPasswordReset(email string) error {
 			log.Printf("⚠️  Reset email non inviata a %s: %v", user.Email, err)
 		}
 	}()
-
 	return nil
 }
 

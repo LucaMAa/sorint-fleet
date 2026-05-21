@@ -16,8 +16,6 @@ type LoginDto struct {
 }
 
 type AuthResponseDto struct {
-	Token              string      `json:"token"`
-	RefreshToken       string      `json:"refresh_token"`
 	User               *model.User `json:"user"`
 	MustChangePassword bool        `json:"must_change_password"`
 }

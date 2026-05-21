@@ -10,7 +10,7 @@ type PageParams struct {
 	Limit  int
 	Offset int
 }
- 
+
 func ParsePageParams(c *gin.Context) PageParams {
 	p := PageParams{Limit: 10, Offset: 0}
 	if l := c.Query("limit"); l != "" {
