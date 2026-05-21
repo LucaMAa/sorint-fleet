@@ -19,6 +19,7 @@ type VehicleRepository interface {
 	Delete(id uuid.UUID) error
 	FindAllBrands() ([]model.Brand, error)
 	FindAllModelsByBrand(brandName string) ([]model.Model, error)
+	CreateBatch(vehicles []*model.Vehicle) error
 }
 
 type VehicleFilters struct {
@@ -131,4 +132,8 @@ func (r *vehicleRepository) FindAllModelsByBrand(brandName string) ([]model.Mode
 		Joins("LEFT JOIN brands b ON m.brand_id = b.id").
 		Find(&models).Error
 	return models, err
+}
+
+func (r *vehicleRepository) CreateBatch(vehicles []*model.Vehicle) error {
+    return r.db.CreateInBatches(vehicles, 100).Error
 }

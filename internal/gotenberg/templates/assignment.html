@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 12pt;
+      color: #1a1a1a;
+      padding: 40px 50px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 28px;
+    }
+
+    .logo {
+      width: 54px;
+      height: 54px;
+    }
+
+    .company-name {
+      font-size: 22pt;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #1a1a1a;
+    }
+
+    .company-sub {
+      font-size: 9pt;
+      color: #666;
+      letter-spacing: 0.3px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 2.5px solid #ee7225;
+      margin: 18px 0;
+    }
+
+    .doc-title {
+      text-align: center;
+      font-size: 13pt;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #1a1a1a;
+      margin-bottom: 28px;
+    }
+
+    .body-text {
+      line-height: 1.75;
+      margin-bottom: 10px;
+      color: #2a2a2a;
+    }
+
+    .authorize-label {
+      text-align: center;
+      font-size: 16pt;
+      font-weight: 800;
+      color: #ee7225;
+      letter-spacing: 3px;
+      margin: 22px 0 18px;
+    }
+
+    .highlight {
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    .checkboxes {
+      margin: 20px 0 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11.5pt;
+      color: #2a2a2a;
+    }
+
+    .box {
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid #555;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .box.checked {
+      border-color: #ee7225;
+      background: #ee7225;
+      position: relative;
+    }
+
+    .box.checked::after {
+      content: '';
+      position: absolute;
+      left: 3px;
+      top: 0px;
+      width: 5px;
+      height: 9px;
+      border: 2px solid white;
+      border-top: none;
+      border-left: none;
+      transform: rotate(45deg);
+    }
+
+    .fine-print {
+      margin-top: 18px;
+      font-size: 10.5pt;
+      color: #444;
+      line-height: 1.7;
+    }
+
+    .fine-print p {
+      margin-bottom: 4px;
+    }
+
+    .signature-area {
+      margin-top: 50px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .sig-date {
+      font-size: 10pt;
+      color: #555;
+    }
+
+    .sig-block {
+      text-align: center;
+      min-width: 220px;
+    }
+
+    .sig-label {
+      font-size: 9pt;
+      color: #888;
+      margin-bottom: 30px;
+    }
+
+    .sig-line {
+      border-top: 1px solid #555;
+      margin-bottom: 6px;
+    }
+
+    .sig-name {
+      font-size: 9.5pt;
+      color: #555;
+      font-style: italic;
+    }
+
+    .footer {
+      position: fixed;
+      bottom: 20px;
+      left: 50px;
+      right: 50px;
+      border-top: 1px solid #ddd;
+      padding-top: 6px;
+      font-size: 8pt;
+      color: #aaa;
+      text-align: center;
+    }
+
+    .logo {
+      height: 54px;
+      width: auto;
+      object-fit: contain;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <img class="logo" src="data:image/png;base64,{{.LogoBase64}}" />
+    <div class="company-name">SORINT.LAB</div>
+    <div class="company-sub">Via Zanica, 17 &mdash; 24050 Grassobbio (BG) &mdash; P.IVA 03419770163</div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="doc-title">Autorizzazione all&rsquo;utilizzo di veicolo aziendale</div>
+
+  <p class="body-text">
+    Io sottoscritta, <span class="highlight">{{.SignerName}}</span>,
+    in qualit&agrave; di <em>People Development Responsible</em> della societ&agrave;
+  </p>
+  <p class="body-text">
+    <strong>SORINT.LAB S.P.A.</strong> con sede in GRASSOBBIO (BG), Via Zanica, 17,<br>
+    COD.FISC., N.REG.IMPR. BG95164770166 &mdash; P.I. 03419770163,
+  </p>
+
+  <div class="authorize-label">AUTORIZZO</div>
+
+  <p class="body-text">
+    <span class="highlight">la Sig.ra / il Sig. {{.AssigneeName}}</span>
+  </p>
+  <p class="body-text">
+    ad utilizzare la presente vettura aziendale
+    <span class="highlight">{{.VehicleBrand}} {{.VehicleModel}}</span>
+    targata: <span class="highlight">{{.LicensePlate}}</span>
+  </p>
+
+  <div class="checkboxes">
+    <div class="checkbox-row">
+      <div class="box{{if .UsagePromiscuo}} checked{{end}}"></div>
+      <span>per uso promiscuo</span>
+    </div>
+    <div class="checkbox-row">
+      <div class="box{{if .UsageLavorativo}} checked{{end}}"></div>
+      <span>per motivi esclusivamente lavorativi</span>
+    </div>
+  </div>
+
+  <div class="fine-print">
+    <p>come meglio specificato dal nostro regolamento interno aziendale.</p>
+    <p>Si raccomanda un utilizzo responsabile e rispettoso del codice della strada.</p>
+    <p>L&rsquo;azienda non si assume alcuna responsabilit&agrave; per l&rsquo;utilizzo improprio del mezzo.</p>
+  </div>
+
+  <div class="signature-area">
+    <div class="sig-date">Grassobbio (BG), {{.DateFormatted}}</div>
+    <div class="sig-block">
+      <div class="sig-label">Firma autorizzante</div>
+      <div class="sig-line"></div>
+      <div class="sig-name">{{.SignerName}}</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Documento generato il {{.DateFormatted}} &mdash; Sorint.lab Fleet Management
+  </div>
+
+</body>
+
+</html>

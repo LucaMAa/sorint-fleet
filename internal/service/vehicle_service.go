@@ -261,26 +261,30 @@ func (s *vehicleService) ImportFromExcel(file io.Reader) (int, error) {
 		return 0, errors.New("no sheets found")
 	}
 
-	var rows [][]string
-	for _, sheet := range sheets {
-		r := f.GetRows(sheet)
-		if len(r) > 1 {
-			rows = r
-			break
+	var sheetName string
+	for _, name := range sheets {
+		sheetName = name
+		break
+	}
+
+	reader, err := f.Rows(sheetName)
+	if err != nil {
+		return 0, err
+	}
+
+	vehicles := make([]*model.Vehicle, 0)
+	first := true
+
+	for reader.Next() {
+		row := reader.Columns()
+		if first {
+			first = false
+			continue
 		}
-	}
-
-	if len(rows) == 0 {
-		return 0, errors.New("empty sheet")
-	}
-
-	count := 0
-	for i := 1; i < len(rows); i++ {
-		row := rows[i]
 		if len(row) < 4 {
 			continue
 		}
-		vehicle := &model.Vehicle{
+		vehicles = append(vehicles, &model.Vehicle{
 			LicensePlate: row[0],
 			Brand:        row[1],
 			Model:        row[2],
@@ -290,11 +294,16 @@ func (s *vehicleService) ImportFromExcel(file io.Reader) (int, error) {
 			Mileage:      pkg.ParseInt(pkg.GetOr(row, 6)),
 			Notes:        pkg.GetOr(row, 7),
 			Status:       model.StatusAvailable,
-		}
-		if err := s.vehicleRepo.Create(vehicle); err == nil {
-			count++
-		}
+		})
 	}
 
-	return count, nil
+	if len(vehicles) == 0 {
+		return 0, errors.New("no valid rows")
+	}
+
+	if err := s.vehicleRepo.CreateBatch(vehicles); err != nil {
+		return 0, err
+	}
+
+	return len(vehicles), nil
 }

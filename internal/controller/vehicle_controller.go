@@ -1,11 +1,15 @@
 package controller
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
 	"strconv"
 
 	"sorint-fleet/internal/dto"
 	"sorint-fleet/internal/model"
 	"sorint-fleet/internal/service"
+	"sorint-fleet/pkg"
 	"sorint-fleet/pkg/response"
 
 	"github.com/gin-gonic/gin"
@@ -14,10 +18,11 @@ import (
 
 type VehicleController struct {
 	vehicleSvc service.VehicleService
+	pdfSvc     service.PDFService
 }
 
-func NewVehicleController(vehicleSvc service.VehicleService) *VehicleController {
-	return &VehicleController{vehicleSvc: vehicleSvc}
+func NewVehicleController(vehicleSvc service.VehicleService, pdfSvc service.PDFService) *VehicleController {
+	return &VehicleController{vehicleSvc: vehicleSvc, pdfSvc: pdfSvc}
 }
 
 func parsePageParams(c *gin.Context) (limit, offset int) {
@@ -42,7 +47,6 @@ func (ctrl *VehicleController) Create(c *gin.Context) {
 		response.BadRequest(c, err.Error())
 		return
 	}
-
 
 	vehicle, err := ctrl.vehicleSvc.Create(input)
 	if err != nil {
@@ -234,4 +238,32 @@ func (ctrl *VehicleController) ImportExcel(c *gin.Context) {
 	}
 
 	response.OK(c, result)
+}
+
+func (ctrl *VehicleController) AssignmentPDF(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, "id is not valid")
+		return
+	}
+ 
+	vehicle, err := ctrl.vehicleSvc.GetByID(id)
+	if err != nil || vehicle == nil {
+		response.NotFound(c, "vehicle not found")
+		return
+	}
+ 
+	pdfBytes, err := ctrl.pdfSvc.AssignmentPDF(vehicle)
+	if err != nil {
+		if errors.Is(err, pkg.ErrVehicleNotAssigned) {
+			response.BadRequest(c, err.Error())
+			return
+		}
+		response.InternalError(c, err)
+		return
+	}
+ 
+	filename := fmt.Sprintf("%s.pdf", vehicle.LicensePlate)
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

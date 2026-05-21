@@ -2,6 +2,7 @@ package router
 
 import (
 	"sorint-fleet/internal/controller"
+	"sorint-fleet/internal/gotenberg"
 	"sorint-fleet/internal/middleware"
 	"sorint-fleet/internal/repository"
 	"sorint-fleet/internal/service"
@@ -14,6 +15,7 @@ func Setup() *gin.Engine {
 	r := gin.Default()
 
 	r.Use(corsMiddleware())
+	gClient  := gotenberg.NewClient("")
 
 	userRepo := repository.NewUserRepository()
 	vehicleRepo := repository.NewVehicleRepository()
@@ -31,8 +33,12 @@ func Setup() *gin.Engine {
 	userSvc := service.NewUserService(userRepo)
 	profileSvc := service.NewProfileService(userRepo, emailChangeRepo)
 
+
+	pdfGen   := gotenberg.NewGenerator(gClient)
+	pdfSvc   := service.NewPDFService(pdfGen, "")
+
 	authCtrl := controller.NewAuthController(authSvc)
-	vehicleCtrl := controller.NewVehicleController(vehicleSvc)
+	vehicleCtrl := controller.NewVehicleController(vehicleSvc,pdfSvc)
 	userCtrl := controller.NewUserController(userSvc)
 	profileCtrl := controller.NewProfileController(profileSvc)
 
@@ -88,6 +94,7 @@ func Setup() *gin.Engine {
 			vehicles.DELETE("/:id", middleware.RequireRole("admin"), vehicleCtrl.Delete)
 			vehicles.POST("/import", middleware.RequireRole("admin"), vehicleCtrl.ImportExcel)
 			vehicles.GET("/:id/history", assignmentCtrl.VehicleHistory)
+			vehicles.GET("/:id/assignment-pdf", vehicleCtrl.AssignmentPDF)
 		}
 
 		vehicleMeta := v1.Group("/vehicle-meta", middleware.Auth(), middleware.RequireRole("admin"))
