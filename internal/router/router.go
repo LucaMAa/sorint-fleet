@@ -38,7 +38,7 @@ func Setup() *gin.Engine {
 
 	r.GET("/ws", ws.ServeWS)
 
-	v1 := r.Group("/api/v1")
+	v1 := r.Group("/api")
 	{
 		auth := v1.Group("/auth")
 		{

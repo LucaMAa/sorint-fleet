@@ -14,7 +14,7 @@ import (
 )
 
 type UserService interface {
-	List(filters dto.ListUsersDto) ([]model.User, int64, error)
+	List(filters dto.ListUsersParams) ([]model.User, int64, error)
 	GetByID(id uuid.UUID) (*model.User, error)
 	UpdateRole(id uuid.UUID, role string) (*model.User, error)
 	ListPending() ([]model.User, error)
@@ -36,15 +36,18 @@ type UpdateRoleInput struct {
 	Role string `json:"role" binding:"required,oneof=user admin"`
 }
 
-func (s *userService) List(filters dto.ListUsersDto) ([]model.User, int64, error) {
+func (s *userService) List(filters dto.ListUsersParams) ([]model.User, int64, error) {
 	limit := filters.Limit
 	if limit <= 0 {
 		limit = 10
 	}
-	return s.userRepo.FindAll(repository.UserFilters{
+	return s.userRepo.FindAll(dto.ListUsersParams{
+		PageParams: dto.PageParams{
+        Limit:  limit,
+        Offset: filters.Offset,
+    },
 		Search: filters.Search,
-		Limit:  limit,
-		Offset: filters.Offset,
+		Enabled: filters.Enabled,
 	})
 }
 

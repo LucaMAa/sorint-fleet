@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+</head>
+
+<body style="margin:0;padding:0;background:#09090b;font-family:Inter,system-ui,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table width="480" cellpadding="0" cellspacing="0"
+          style="background:#18181b;border:1px solid rgba(255,255,255,0.14);border-radius:14px;padding:36px;">
+          <tr>
+            <td align="center" style="padding-bottom:24px;">
+              <div style="width:48px;height:48px;background:#f59e0b;border-radius:12px;
+                          font-size:1.4rem;line-height:48px;text-align:center;">⏰</div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding-bottom:8px;">
+              <h1 style="margin:0;font-size:1.5rem;font-weight:800;color:#fafafa;">Auto jolly scaduta</h1>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding-bottom:24px;">
+              <p style="margin:0;color:#a1a1aa;font-size:.9rem;line-height:1.6;">
+                Il periodo jolly di <strong style="color:#fafafa;">{{.JollyDays}} giorni</strong>
+                per il veicolo assegnato a
+                <strong style="color:#fafafa;">{{.FirstName}} {{.LastName}}</strong>
+                è terminato.<br><br>
+                Veicolo: <strong style="color:#818cf8;">{{.Vehicle}}</strong><br>
+                Targa: <strong style="color:#818cf8;">{{.LicensePlate}}</strong><br>
+                Assegnato il: <strong style="color:#fafafa;">{{.StartedAt}}</strong>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding-bottom:24px;">
+              <p style="margin:0;color:#a1a1aa;font-size:.9rem;">
+                L'utente ha riconsegnato il veicolo?
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center">
+              <p style="margin:0;color:#52525b;font-size:.75rem;">
+                Accedi alla piattaforma per gestire l'assegnazione.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+
+</html>

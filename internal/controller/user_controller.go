@@ -21,25 +21,19 @@ func NewUserController(userSvc service.UserService) *UserController {
 }
 
 func (ctrl *UserController) List(c *gin.Context) {
-	limit, offset := parsePageParams(c)
-
-	filters := dto.ListUsersDto{
-		Search: c.Query("search"),
-		Limit:  limit,
-		Offset: offset,
-	}
-
-	users, total, err := ctrl.userSvc.List(filters)
+	params := dto.ParseListUsersParams(c)
+ 
+	users, total, err := ctrl.userSvc.List(params)
 	if err != nil {
 		response.InternalError(c, err)
 		return
 	}
-
+ 
 	response.OK(c, dto.PaginatedResponse[model.User]{
 		Items:  users,
 		Total:  total,
-		Limit:  limit,
-		Offset: offset,
+		Limit:  params.Limit,
+		Offset: params.Offset,
 	})
 }
 

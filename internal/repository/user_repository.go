@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"sorint-fleet/internal/config"
+	"sorint-fleet/internal/dto"
 	"sorint-fleet/internal/model"
 
 	"github.com/google/uuid"
@@ -14,19 +15,12 @@ type UserRepository interface {
 	Create(user *model.User) error
 	FindByID(id uuid.UUID) (*model.User, error)
 	FindByEmail(email string) (*model.User, error)
-	FindAll(filters UserFilters) ([]model.User, int64, error)
+	FindAll(filters dto.ListUsersParams) ([]model.User, int64, error)
 	FindByStatus(status model.UserStatus) ([]model.User, error)
 	ExistsByEmail(email string) (bool, error)
 	Save(user *model.User) error
 	Delete(id uuid.UUID) error
 }
-
-type UserFilters struct {
-	Search string
-	Limit  int
-	Offset int
-}
-
 type userRepository struct {
 	db *gorm.DB
 }
@@ -57,7 +51,7 @@ func (r *userRepository) FindByEmail(email string) (*model.User, error) {
 	return &user, err
 }
 
-func (r *userRepository) FindAll(filters UserFilters) ([]model.User, int64, error) {
+func (r *userRepository) FindAll(filters dto.ListUsersParams) ([]model.User, int64, error) {
 	var users []model.User
 	var total int64
 
@@ -79,6 +73,10 @@ func (r *userRepository) FindAll(filters UserFilters) ([]model.User, int64, erro
 			)`,
 			search, like, like, like,
 		)
+	}
+
+	if filters.Enabled != nil && *filters.Enabled {
+		q = q.Where("status = ?", model.StatusApproved)
 	}
 
 	if err := q.Count(&total).Error; err != nil {

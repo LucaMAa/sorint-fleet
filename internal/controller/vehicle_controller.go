@@ -43,6 +43,7 @@ func (ctrl *VehicleController) Create(c *gin.Context) {
 		return
 	}
 
+
 	vehicle, err := ctrl.vehicleSvc.Create(input)
 	if err != nil {
 		if err.Error() == "license plate already exist" {

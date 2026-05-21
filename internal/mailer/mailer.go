@@ -57,3 +57,11 @@ func Send(to, subject, htmlBody string) error {
 	msg := []byte(header + "\r\n\r\n" + htmlBody)
 	return smtp.SendMail(fmt.Sprintf("%s:%s", host, port), auth, user, []string{to}, msg)
 }
+
+func adminEmailFromEnv() string {
+	e := os.Getenv("ADMIN_EMAIL")
+	if e == "" {
+		return "admin@sorint.it"
+	}
+	return e
+}

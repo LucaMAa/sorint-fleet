@@ -61,15 +61,17 @@ func (s *vehicleService) Create(input dto.CreateVehicleDto) (*model.Vehicle, err
 	}
 
 	vehicle := &model.Vehicle{
-		LicensePlate: input.LicensePlate,
-		Brand:        input.Brand,
-		Model:        input.Model,
-		Year:         input.Year,
-		Color:        input.Color,
-		FuelType:     fuelType,
-		Mileage:      input.Mileage,
-		Notes:        input.Notes,
-		Status:       model.StatusAvailable,
+		LicensePlate:  input.LicensePlate,
+		Brand:         input.Brand,
+		Model:         input.Model,
+		Year:          input.Year,
+		Color:         input.Color,
+		FuelType:      fuelType,
+		Mileage:       input.Mileage,
+		Notes:         input.Notes,
+		Status:        model.StatusAvailable,
+		Jolly:         input.Jolly,
+		JollyDuration: input.JollyDuration,
 	}
 
 	if err := s.vehicleRepo.Create(vehicle); err != nil {
@@ -233,6 +235,12 @@ func (s *vehicleService) Update(id uuid.UUID, input dto.UpdateVehicleDto) (*mode
 	}
 	if input.Notes != nil {
 		vehicle.Notes = *input.Notes
+	}
+	if input.Jolly != nil {
+		vehicle.Jolly = *input.Jolly
+	}
+	if input.JollyDuration != nil {
+		vehicle.JollyDuration = *input.JollyDuration
 	}
 
 	if err := s.vehicleRepo.Update(vehicle); err != nil {

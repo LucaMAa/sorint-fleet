@@ -6,6 +6,7 @@ import (
 
 	"sorint-fleet/internal/bootstrap"
 	"sorint-fleet/internal/config"
+	"sorint-fleet/internal/cron"
 	"sorint-fleet/internal/router"
 )
 
@@ -19,6 +20,10 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+
+	c := cron.New()
+	c.Start()
+	defer c.Stop()
 
 	r := router.Setup()
 

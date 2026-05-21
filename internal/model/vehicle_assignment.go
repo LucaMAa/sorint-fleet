@@ -22,6 +22,7 @@ type VehicleAssignment struct {
 
 	Vehicle *Vehicle `gorm:"foreignKey:VehicleID" json:"vehicle,omitempty"`
 	User    *User    `gorm:"foreignKey:UserID"    json:"user,omitempty"`
+	NotifiedAt *time.Time `json:"notified_at,omitempty"`
 }
 
 func (a *VehicleAssignment) BeforeCreate(tx *gorm.DB) error {

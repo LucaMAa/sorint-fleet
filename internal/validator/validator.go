@@ -9,6 +9,12 @@ import (
 var validate = validator.New()
 
 func Validate[T any](input T) error {
+	if v, ok := any(input).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return err
+		}
+	}
+
 	err := validate.Struct(input)
 	if err == nil {
 		return nil
