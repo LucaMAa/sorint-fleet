@@ -26,7 +26,7 @@ type DatabaseConfig struct {
 
 func LoadConfig() *DatabaseConfig {
 	if err := godotenv.Load(); err != nil {
-		log.Println("⚠️  File .env non trovato, utilizzo variabili d'ambiente")
+		log.Println("⚠️  File .env not found, relying on environment variables")
 	}
 	cfg := &DatabaseConfig{
 		Host:     os.Getenv("DB_HOST"),
@@ -36,12 +36,24 @@ func LoadConfig() *DatabaseConfig {
 		Name:     os.Getenv("DB_NAME"),
 		SSLMode:  os.Getenv("DB_SSLMODE"),
 	}
-	if cfg.Host == "" { log.Fatal("DB_HOST missing") }
-	if cfg.Port == "" { log.Fatal("DB_PORT missing") }
-	if cfg.User == "" { log.Fatal("DB_USER missing") }
-	if cfg.Password == "" { log.Fatal("DB_PASSWORD missing") }
-	if cfg.Name == "" { log.Fatal("DB_NAME missing") }
-	if cfg.SSLMode == "" { log.Fatal("DB_SSLMODE missing") }
+	if cfg.Host == "" {
+		log.Fatal("DB_HOST missing")
+	}
+	if cfg.Port == "" {
+		log.Fatal("DB_PORT missing")
+	}
+	if cfg.User == "" {
+		log.Fatal("DB_USER missing")
+	}
+	if cfg.Password == "" {
+		log.Fatal("DB_PASSWORD missing")
+	}
+	if cfg.Name == "" {
+		log.Fatal("DB_NAME missing")
+	}
+	if cfg.SSLMode == "" {
+		log.Fatal("DB_SSLMODE missing")
+	}
 	return cfg
 }
 
@@ -64,8 +76,11 @@ func InitDB(cfg *DatabaseConfig) {
 		&model.Brand{},
 		&model.Model{},
 		&model.VehicleAssignment{},
+		&model.Request{},
 		&model.PasswordReset{},
 		&model.EmailChange{},
+		&model.FormTemplate{},
+		&model.FormSubmission{},
 	); err != nil {
 		log.Fatalf("error during automigrate: %v", err)
 	}

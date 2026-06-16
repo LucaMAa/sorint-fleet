@@ -16,7 +16,6 @@ func NewVehicleAssignmentController(svc service.VehicleAssignmentService) *Vehic
 	return &VehicleAssignmentController{svc: svc}
 }
 
-// GET /vehicles/:id/history
 func (ctrl *VehicleAssignmentController) VehicleHistory(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -31,7 +30,6 @@ func (ctrl *VehicleAssignmentController) VehicleHistory(c *gin.Context) {
 	response.OK(c, list)
 }
 
-// GET /users/:id/history
 func (ctrl *VehicleAssignmentController) UserHistory(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

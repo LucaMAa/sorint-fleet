@@ -9,6 +9,7 @@ import (
 	"sorint-fleet/internal/config"
 	"sorint-fleet/internal/cron"
 	"sorint-fleet/internal/router"
+	"sorint-fleet/internal/search"
 	"sorint-fleet/internal/session"
 )
 
@@ -31,6 +32,19 @@ func main() {
 	c := cron.New()
 	c.Start()
 	defer c.Stop()
+
+	if _, err := search.NewClientFromEnv(); err != nil {
+		log.Printf("Elasticsearch not configured: %v", err)
+	} else {
+		if err := search.InitIndices(); err != nil {
+			log.Printf("failed init ES indices: %v", err)
+		}
+		go func() {
+			if err := search.IndexAllVehicles(); err != nil {
+				log.Printf("failed indexing existing vehicles: %v", err)
+			}
+		}()
+	}
 
 	r := router.Setup(sessionStore)
 

@@ -1,4 +1,3 @@
-// internal/model/vehicle_assignment.go
 package model
 
 import (
@@ -20,8 +19,8 @@ type VehicleAssignment struct {
 	EndedAt   *time.Time `                                 json:"ended_at,omitempty"`
 	Notes     string     `                                 json:"notes"`
 
-	Vehicle *Vehicle `gorm:"foreignKey:VehicleID" json:"vehicle,omitempty"`
-	User    *User    `gorm:"foreignKey:UserID"    json:"user,omitempty"`
+	Vehicle    *Vehicle   `gorm:"foreignKey:VehicleID" json:"vehicle,omitempty"`
+	User       *User      `gorm:"foreignKey:UserID"    json:"user,omitempty"`
 	NotifiedAt *time.Time `json:"notified_at,omitempty"`
 }
 

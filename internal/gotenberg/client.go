@@ -9,12 +9,10 @@ import (
 	"os"
 )
 
-// Client handles communication with a Gotenberg instance.
 type Client struct {
 	BaseURL string
 }
 
-// HTMLToPDFOptions controls Chromium rendering parameters.
 type HTMLToPDFOptions struct {
 	PaperWidth      string
 	PaperHeight     string
@@ -26,7 +24,6 @@ type HTMLToPDFOptions struct {
 	Scale           string
 }
 
-// DefaultA4Options returns standard A4 options with no margins.
 var DefaultA4Options = HTMLToPDFOptions{
 	PaperWidth:      "8.27",
 	PaperHeight:     "11.69",
@@ -38,7 +35,6 @@ var DefaultA4Options = HTMLToPDFOptions{
 	Scale:           "1.0",
 }
 
-// NewClient creates a Client, falling back to $GOTENBERG_URL or localhost:3000.
 func NewClient(baseURL string) *Client {
 	if baseURL == "" {
 		baseURL = os.Getenv("GOTENBERG_URL")
@@ -49,7 +45,6 @@ func NewClient(baseURL string) *Client {
 	return &Client{BaseURL: baseURL}
 }
 
-// HTMLToPDF converts raw HTML bytes to a PDF using Gotenberg's Chromium endpoint.
 func (c *Client) HTMLToPDF(htmlContent []byte, opts HTMLToPDFOptions) ([]byte, error) {
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)
@@ -63,13 +58,13 @@ func (c *Client) HTMLToPDF(htmlContent []byte, opts HTMLToPDFOptions) ([]byte, e
 	}
 
 	fields := map[string]string{
-		"paperWidth":      opts.PaperWidth,
-		"paperHeight":     opts.PaperHeight,
-		"marginTop":       opts.MarginTop,
-		"marginBottom":    opts.MarginBottom,
-		"marginLeft":      opts.MarginLeft,
-		"marginRight":     opts.MarginRight,
-		"scale":           opts.Scale,
+		"paperWidth":   opts.PaperWidth,
+		"paperHeight":  opts.PaperHeight,
+		"marginTop":    opts.MarginTop,
+		"marginBottom": opts.MarginBottom,
+		"marginLeft":   opts.MarginLeft,
+		"marginRight":  opts.MarginRight,
+		"scale":        opts.Scale,
 	}
 	if opts.PrintBackground {
 		fields["printBackground"] = "true"

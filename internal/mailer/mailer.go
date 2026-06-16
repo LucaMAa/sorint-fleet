@@ -11,7 +11,6 @@ import (
 	"strings"
 )
 
-// baseDir risolve il path dei template relativamente a questo file
 func baseDir() string {
 	_, filename, _, _ := runtime.Caller(0)
 	return filepath.Join(filepath.Dir(filename), "templates")

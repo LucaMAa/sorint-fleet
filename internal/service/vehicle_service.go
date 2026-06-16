@@ -3,11 +3,13 @@ package service
 import (
 	"errors"
 	"io"
+	"log"
 	"time"
 
 	"sorint-fleet/internal/dto"
 	"sorint-fleet/internal/model"
 	"sorint-fleet/internal/repository"
+	"sorint-fleet/internal/search"
 	"sorint-fleet/internal/validator"
 	"sorint-fleet/pkg"
 
@@ -77,6 +79,9 @@ func (s *vehicleService) Create(input dto.CreateVehicleDto) (*model.Vehicle, err
 	if err := s.vehicleRepo.Create(vehicle); err != nil {
 		return nil, err
 	}
+	if err := search.IndexVehicle(*vehicle); err != nil {
+		log.Printf("warning: failed to index vehicle %s: %v", vehicle.ID.String(), err)
+	}
 	return vehicle, nil
 }
 
@@ -132,6 +137,9 @@ func (s *vehicleService) Assign(vehicleID uuid.UUID, input dto.AssignVehicleDto)
 	if err := s.vehicleRepo.Update(vehicle); err != nil {
 		return nil, err
 	}
+	if err := search.IndexVehicle(*vehicle); err != nil {
+		log.Printf("warning: failed to update vehicle index after assign %s: %v", vehicle.ID.String(), err)
+	}
 
 	assignment := &model.VehicleAssignment{
 		VehicleID: vehicleID,
@@ -165,6 +173,9 @@ func (s *vehicleService) Unassign(vehicleID uuid.UUID) (*model.Vehicle, error) {
 	if err := s.vehicleRepo.Update(vehicle); err != nil {
 		return nil, err
 	}
+	if err := search.IndexVehicle(*vehicle); err != nil {
+		log.Printf("warning: failed to update vehicle index after unassign %s: %v", vehicle.ID.String(), err)
+	}
 	if err := s.assignmentRepo.CloseActive(vehicleID); err != nil {
 		return nil, err
 	}
@@ -180,7 +191,13 @@ func (s *vehicleService) Delete(id uuid.UUID) error {
 	if vehicle == nil {
 		return errors.New("vehicle not found")
 	}
-	return s.vehicleRepo.Delete(id)
+	if err := s.vehicleRepo.Delete(id); err != nil {
+		return err
+	}
+	if err := search.DeleteVehicle(id.String()); err != nil {
+		log.Printf("warning: failed to delete vehicle index %s: %v", id.String(), err)
+	}
+	return nil
 }
 
 func (s *vehicleService) GetBrands() ([]model.Brand, error) {
@@ -245,6 +262,9 @@ func (s *vehicleService) Update(id uuid.UUID, input dto.UpdateVehicleDto) (*mode
 
 	if err := s.vehicleRepo.Update(vehicle); err != nil {
 		return nil, err
+	}
+	if err := search.IndexVehicle(*vehicle); err != nil {
+		log.Printf("warning: failed to update vehicle index %s: %v", vehicle.ID.String(), err)
 	}
 
 	return s.vehicleRepo.FindByID(id)

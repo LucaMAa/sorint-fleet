@@ -8,6 +8,7 @@ import (
 
 	"sorint-fleet/internal/dto"
 	"sorint-fleet/internal/model"
+	"sorint-fleet/internal/search"
 	"sorint-fleet/internal/service"
 	"sorint-fleet/pkg"
 	"sorint-fleet/pkg/response"
@@ -266,4 +267,34 @@ func (ctrl *VehicleController) AssignmentPDF(c *gin.Context) {
 	filename := fmt.Sprintf("%s.pdf", vehicle.LicensePlate)
 	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+func (ctrl *VehicleController) Recommend(c *gin.Context) {
+	q := c.Query("q")
+	body := c.Query("body_type")
+	var carplayPtr *bool
+	var parkingPtr *bool
+	if v := c.Query("carplay"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			carplayPtr = &b
+		}
+	}
+	if v := c.Query("parking"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			parkingPtr = &b
+		}
+	}
+	size := 10
+	if s := c.Query("size"); s != "" {
+		if v, err := strconv.Atoi(s); err == nil && v > 0 {
+			size = v
+		}
+	}
+
+	hits, err := search.SearchVehicles(q, body, carplayPtr, parkingPtr, size)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+	response.OK(c, hits)
 }
